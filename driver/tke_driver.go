@@ -39,44 +39,91 @@ type Driver struct {
 type state struct {
 	// The id of the cluster
 	ClusterId string
+
 	// The name of the cluster
 	ClusterName string
-	// The vpc id of the cluster
-	VpcId string
-	// Create a empty cluster
-	EmptyCluster bool
-	// CIDR used to assign cluster containers and service IPs must not conflict with VPC CIDR or with other cluster CIDRs in the same VPC (*required)
-	ClusterCIDR string
 	// The description of the cluster
 	ClusterDesc string
-	// The version of the cluster
-	ClusterVersion string
-	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
-	// the extension node will also automatically use this system (*required)
-	OsName string
-	// The project ID of the cluster
-	ProjectId int64
+	// CIDR used to assign cluster containers and service IPs must not conflict with VPC CIDR or with other cluster CIDRs in the same VPC (*required)
+	ClusterCIDR string
 	// Whether to ignore the ClusterCIDR conflict error, the default is 0
 	// 0: Do not ignore the conflict (and return an error); 1: Ignore the conflict (continue to create)
 	IgnoreClusterCIDRConflict int64
-	// The cluster master occupies the IP of a VPC subnet. This parameter specifies which subnet the IP is occupied by the master.
-	// This subnet must be in the same VPC as the cluster.
-	MasterSubnetId string
-
+	// The version of the cluster
+	ClusterVersion string
+	// Create a empty cluster
+	EmptyCluster bool
 	// The region of the cluster
 	Region string
-	// The zone id of the cluster
-	ZoneId string
 	// The secret id used for authentication
 	SecretID string
 	// The secret key used for authentication
 	SecretKey string
+	// cluster state
+	State string
+	// The project ID of the cluster
+	ProjectId int64
+
+	// The zone id of the cluster
+	ZoneId string
+	// The number of nodes purchased, up to 100
+	GoodsNum int64
+	// CPU core number
+	Cpu int64
+	// Memory size (GB)
+	Mem int64
+	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
+	// the extension node will also automatically use this system (*required)
+	OsName string
+	// See CVM Instance Configuration for details . Default: S1.SMALL1
+	InstanceType string
+	// The type of node, the default is PayByHour
+	// another option is PayByMonth
+	CvmType string
+	// The annual renewal fee for the annual subscription, default to NOTIFY_AND_AUTO_RENEW
+	RenewFlag string
+	// Type of bandwidth
+	//PayByMonth vm: PayByMonth, PayByTraffic,
+	//PayByHour vm: PayByHour, PayByTraffic
+	BandwidthType string
+	// Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak
+	Bandwidth int64
+	// Whether to open the public network IP, 0: not open 1: open
+	WanIp int64
+	// Private network ID
+	VpcId string
+	// Subnet ID
+	SubnetId string
+	// Whether it is a public network gateway
+	// 0: non-public network gateway
+	// 1: public network gateway
+	IsVpcGateway int64
+	// System disk size. Linux system adjustment range is 20 - 50G, step size is 1
+	RootSize int64
+	// System disk type. System disk type restrictions are detailed in the CVM instance configuration.
+	// default value of the SSD cloud drive : CLOUD_BASIC.
+	RootType string
+	// Data disk size (GB)
+	StorageSize int64
+	// Data disk type
+	StorageType string
+	// Node password
+	Password string
+	// Key ID
+	KeyId string
+	// The annual subscription period of the annual subscription month, unit month. This parameter is required when cvmType is PayByMonth
+	Period int64
+	// Security group ID, default does not bind any security groups, please fill out the inquiry list of security groups sgId field interface returned
+	SgId string
+	// The cluster master occupies the IP of a VPC subnet. This parameter specifies which subnet the IP is occupied by the master.
+	// This subnet must be in the same VPC as the cluster.
+	MasterSubnetId string
+	// Base64-encoded user script, which is executed after the k8s component is run. The user is required to guarantee the reentrant and retry logic of the script.
+	// The script and its generated log file can be viewed in the /data/ccs_userscript/ path of the node.
+	UserScript string
 
 	// cluster info
 	ClusterInfo types.ClusterInfo
-
-	// cluster state
-	State string
 }
 
 func NewDriver() types.Driver {
@@ -91,6 +138,8 @@ func NewDriver() types.Driver {
 	driver.driverCapabilities.AddCapability(types.SetVersionCapability)
 	driver.driverCapabilities.AddCapability(types.GetClusterSizeCapability)
 	driver.driverCapabilities.AddCapability(types.SetClusterSizeCapability)
+
+
 	return driver
 }
 
@@ -98,30 +147,6 @@ func NewDriver() types.Driver {
 func (d *Driver) GetDriverCreateOptions(ctx context.Context) (*types.DriverFlags, error) {
 	driverFlag := types.DriverFlags{
 		Options: make(map[string]*types.Flag),
-	}
-	driverFlag.Options["cluster-name"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The name of the cluster that should be displayed to the user",
-	}
-	driverFlag.Options["vpc-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The private vpc id of the cluster",
-	}
-	driverFlag.Options["empty-cluster"] = &types.Flag{
-		Type:  types.BoolType,
-		Usage: "Create a empty cluster",
-	}
-	driverFlag.Options["cluster-cidr"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The IP address range of the container pods, must not conflict with VPC CIDR",
-	}
-	driverFlag.Options["cluster-desc"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The description of the cluster",
-	}
-	driverFlag.Options["cluster-version"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The version of the cluster",
 	}
 	driverFlag.Options["secret-id"] = &types.Flag{
 		Type:  types.StringType,
@@ -131,37 +156,133 @@ func (d *Driver) GetDriverCreateOptions(ctx context.Context) (*types.DriverFlags
 		Type:  types.StringType,
 		Usage: "The version of the cluster",
 	}
-	driverFlag.Options["os-name"] = &types.Flag{
+	driverFlag.Options["cluster-name"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "The name of the operating system , currently supports Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64",
+		Usage: "The name of the cluster that should be displayed to the user",
 	}
-	driverFlag.Options["project-id"] = &types.Flag{
-		Type:  types.IntType,
-		Usage: "the ID of your project to use when creating a cluster",
+	driverFlag.Options["cluster-desc"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The description of the cluster",
+	}
+	driverFlag.Options["cluster-cidr"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The IP address range of the container pods, must not conflict with VPC CIDR",
 	}
 	driverFlag.Options["ignore-cluster-cidr-conflict"] = &types.Flag{
 		Type:  types.BoolType,
 		Usage: "Whether to ignore the ClusterCIDR conflict error, the default is 0",
 	}
-	driverFlag.Options["master-subnet-id"] = &types.Flag{
+	driverFlag.Options["cluster-version"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "The cluster master occupies the IP of a VPC subnet",
+		Usage: "The version of the cluster",
 	}
-	driverFlag.Options["secret-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The secret id used to identify the identity of the API caller",
-	}
-	driverFlag.Options["secret-key"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The key used to encrypt the signature string and the server-side verification signature string",
+	driverFlag.Options["empty-cluster"] = &types.Flag{
+		Type:  types.BoolType,
+		Usage: "Create a empty cluster",
 	}
 	driverFlag.Options["region"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The region of the cluster",
 	}
+	driverFlag.Options["project-id"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The ID of your project to use when creating a cluster",
+	}
 	driverFlag.Options["zoneId"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The zone id of the cluster",
+	}
+	driverFlag.Options["goods-num"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The number of nodes purchased, up to 100",
+	}
+	driverFlag.Options["cpu"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Cpu core number",
+	}
+	driverFlag.Options["mem"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Memory size (GB)",
+	}
+	driverFlag.Options["os-name"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The name of the operating system , currently supports Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64",
+	}
+	driverFlag.Options["instance-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "See CVM Instance Configuration for details . Default: S1.SMALL1",
+	}
+	driverFlag.Options["cvm-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The type of node, the default is charged by volume ",
+	}
+	driverFlag.Options["renew-flag"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The annual renewal fee for the annual subscription, default to NOTIFY_AND_AUTO_RENEW",
+	}
+	driverFlag.Options["bandwidth-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Type of bandwidth",
+	}
+	driverFlag.Options["bandwidth"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak",
+	}
+	driverFlag.Options["wan-ip"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "the cluster master occupies the IP of a VPC subnet",
+	}
+	driverFlag.Options["vpc-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Private network ID, please fill out the inquiry list private network interface returned unVpcId (private network unified ID) field",
+	}
+	driverFlag.Options["subnet-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Subnet ID, please fill out the inquiry list of subnets interface returned unSubnetId (unified subnet ID) field",
+	}
+	driverFlag.Options["is-vpc-gateway"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Whether it is a public network gateway, network gateway only in public with a public IP, and in order to work properly when under private network",
+	}
+	driverFlag.Options["root-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "System disk size. Linux system adjustment range is 20 - 50G, step size is 1",
+	}
+	driverFlag.Options["root-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "System disk type. System disk type restrictions are detailed in the CVM instance configuration",
+	}
+	driverFlag.Options["storage-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Data disk size (GB), the step size is 10",
+	}
+	driverFlag.Options["storage-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Data disk type, default value of the SSD cloud drive",
+	}
+	driverFlag.Options["password"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Node password. If it is not set, it will be randomly generated and sent by the station letter",
+	}
+	driverFlag.Options["key-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Key id, after associating the key can be used to logging to the node",
+	}
+	driverFlag.Options["period"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The annual subscription period of the annual subscription month, unit month. This parameter is required when cvmType is PayByMonth",
+	}
+	driverFlag.Options["sg-id"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Security group ID, default does not bind any security groups",
+	}
+	driverFlag.Options["master-subnet-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "the cluster master occupies the IP of a VPC subnet",
+	}
+	driverFlag.Options["user-script"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Base64-encoded user script, which is executed after the k8s component is run.",
 	}
 	return &driverFlag, nil
 }
@@ -185,15 +306,15 @@ func (d *Driver) GetDriverUpdateOptions(ctx context.Context) (*types.DriverFlags
 	}
 	driverFlag.Options["cluster-desc"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "the description of the cluster",
+		Usage: "The description of the cluster",
 	}
 	driverFlag.Options["secret-id"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "the secretID of the cluster",
+		Usage: "The secretID of the cluster",
 	}
 	driverFlag.Options["secret-key"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "the secretKey of the cluster",
+		Usage: "The secretKey of the cluster",
 	}
 	return &driverFlag, nil
 }
@@ -205,24 +326,47 @@ func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
 			Metadata: map[string]string{},
 		},
 	}
-	d.ClusterId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-id", "clusterId").(string)
 	d.ClusterName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-name", "clusterName").(string)
-	d.EmptyCluster = options.GetValueFromDriverOptions(driverOptions, types.BoolType, "empty-cluster", "emptyCluster").(bool)
-	d.VpcId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "vpc-id", "vpcId").(string)
-	d.ClusterCIDR = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-cidr", "clusterCIDR").(string)
 	d.ClusterDesc = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-desc", "clusterDesc").(string)
-	d.ClusterVersion = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-version", "clusterVersion").(string)
-	d.OsName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "os-name", "osName").(string)
-	d.ProjectId = options.GetValueFromDriverOptions(driverOptions, types.IntType, "project-id", "projectId").(int64)
+	d.ClusterCIDR = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-cidr", "clusterCIDR").(string)
 	d.IgnoreClusterCIDRConflict = 0
 	if options.GetValueFromDriverOptions(driverOptions, types.BoolType, "ingore-cluster-cidr-conflict", "ignoreClusterCIDRConflict").(bool) {
 		d.IgnoreClusterCIDRConflict = 1
 	}
-	d.MasterSubnetId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "master-subnet-id", "masterSubnetId").(string)
+	d.ClusterVersion = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-version", "clusterVersion").(string)
+	d.EmptyCluster = false
+	if options.GetValueFromDriverOptions(driverOptions, types.BoolType, "empty-cluster", "emptyCluster").(bool) == true {
+		d.EmptyCluster = false
+	}
+	d.Region = options.GetValueFromDriverOptions(driverOptions, types.StringType, "region").(string)
 	d.SecretID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "secret-id", "secretId").(string)
 	d.SecretKey = options.GetValueFromDriverOptions(driverOptions, types.StringType, "secret-key", "secretKey").(string)
-	d.Region = options.GetValueFromDriverOptions(driverOptions, types.StringType, "region").(string)
+	d.ProjectId = options.GetValueFromDriverOptions(driverOptions, types.IntType, "project-id", "projectId").(int64)
+
 	d.ZoneId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "zone-id", "zoneId").(string)
+	d.GoodsNum = options.GetValueFromDriverOptions(driverOptions, types.IntType, "goods-num", "goodsNum").(int64)
+	d.Cpu = options.GetValueFromDriverOptions(driverOptions, types.IntType, "cpu").(int64)
+	d.Mem = options.GetValueFromDriverOptions(driverOptions, types.IntType, "mem").(int64)
+	d.OsName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "os-name", "osName").(string)
+	d.InstanceType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "instance-type", "instanceType").(string)
+	d.CvmType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cvm-type", "cvmType").(string)
+	d.RenewFlag = options.GetValueFromDriverOptions(driverOptions, types.StringType, "renew-flag", "renewFlag").(string)
+	d.BandwidthType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "bandwidth-type", "bandwidthType").(string)
+	d.Bandwidth = options.GetValueFromDriverOptions(driverOptions, types.IntType, "bandwidth", "bandwidth").(int64)
+	d.WanIp = options.GetValueFromDriverOptions(driverOptions, types.IntType, "wan-ip", "wanIp").(int64)
+	d.VpcId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "vpc-id", "vpcId").(string)
+	d.SubnetId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "subnet-id", "subnetId").(string)
+	d.IsVpcGateway = options.GetValueFromDriverOptions(driverOptions, types.IntType, "is-vpc-gateway", "isVpcGateway").(int64)
+	d.RootSize = options.GetValueFromDriverOptions(driverOptions, types.IntType, "root-size", "rootSize").(int64)
+	d.RootType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "root-type", "rootType").(string)
+	d.StorageSize = options.GetValueFromDriverOptions(driverOptions, types.IntType, "storage-size", "storageSize").(int64)
+	d.StorageType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "storage-type", "storageType").(string)
+	d.Password = options.GetValueFromDriverOptions(driverOptions, types.StringType, "password").(string)
+	d.KeyId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "key-id", "keyId").(string)
+	d.Period = options.GetValueFromDriverOptions(driverOptions, types.IntType, "period").(int64)
+	d.SgId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "sg-id", "sgId").(string)
+	d.MasterSubnetId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "master-subnet-id", "masterSubnetId").(string)
+	d.UserScript = options.GetValueFromDriverOptions(driverOptions, types.StringType, "user-script", "userScript").(string)
 
 	return d, d.validate()
 }
@@ -292,7 +436,7 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 
 	if err == nil {
 		fmt.Printf("resp data str: %s\n", resp.ToJsonString())
-		state.ClusterId = *resp.Data.ClusterId
+		state.ClusterId = resp.Data.ClusterId
 		logrus.Info("Cluster %s create is called for region %s and zone %s. Status Code %v", state.ClusterId, state.Region, state.ZoneId, resp.Code)
 	}
 
