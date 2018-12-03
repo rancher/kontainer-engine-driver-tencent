@@ -1,4 +1,4 @@
-Kontainer Engine TKE Driver
+Kontainer Engine Driver Tencent
 ===============================
 
 This repo contains the TKE(Tencent Kubernetes Engine) driver for the rancher server
@@ -10,7 +10,7 @@ This repo contains the TKE(Tencent Kubernetes Engine) driver for the rancher ser
 
 ## Running
 
-`./bin/rancher-tke-driver`
+`./bin/kontainer-engine-driver-tencent`
 
 ## License
 Copyright (c) 2018 [Rancher Labs, Inc.](http://rancher.com)

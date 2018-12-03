@@ -3,12 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 	"sync"
 
-	"github.com/rancher/kontainer-engine-tke-driver/driver"
+	"github.com/sirupsen/logrus"
+
+	"github.com/rancher/kontainer-engine-driver-tencent/driver"
 	"github.com/rancher/kontainer-engine/types"
 )
 

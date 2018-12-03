@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rancher/kontainer-engine-tke-driver/tencentcloud/ccs"
+	"github.com/rancher/kontainer-engine-driver-tencent/tencentcloud/ccs"
 	"github.com/rancher/kontainer-engine/drivers/options"
 	"github.com/rancher/kontainer-engine/drivers/util"
 	"github.com/rancher/kontainer-engine/types"
