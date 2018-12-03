@@ -1,3 +1,3 @@
 FROM ubuntu:16.04
-COPY rancher-tke-driver /usr/bin/
-CMD ["rancher-tke-driver"]
+COPY kontainer-engine-tke-driver /usr/bin/
+CMD ["kontainer-engine-tke-driver"]
