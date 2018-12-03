@@ -10,7 +10,7 @@ This repo contains the TKE(Tencent Kubernetes Engine) driver for the rancher ser
 
 ## Running
 
-`./bin/rancher-tke-driver`
+`./bin/rancher-tencentkubernetesengine-driver`
 
 ## License
 Copyright (c) 2018 [Rancher Labs, Inc.](http://rancher.com)

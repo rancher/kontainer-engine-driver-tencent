@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/rancher/kontainer-engine-tke-driver/driver"
+	"github.com/rancher/kontainer-engine-tencentkubernetesengine-driver/driver"
 	"github.com/rancher/kontainer-engine/types"
 )
 
