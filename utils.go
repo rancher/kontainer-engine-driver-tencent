@@ -102,6 +102,7 @@ func GenerateServiceAccountToken(clientset kubernetes.Interface) (string, error)
 	return "", errs.New("failed to fetch serviceAccountToken")
 }
 
+// ConvertToRkeConfig generates config files
 func ConvertToRkeConfig(config string) (v3.RancherKubernetesEngineConfig, error) {
 	var rkeConfig v3.RancherKubernetesEngineConfig
 	if err := yaml.Unmarshal([]byte(config), &rkeConfig); err != nil {

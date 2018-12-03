@@ -17,4 +17,5 @@ for i in ${PACKAGES}; do
 done
 test -z "$failed"
 echo Running: go fmt
+echo ${PACKAGES}
 test -z "$(go fmt ${PACKAGES} | tee /dev/stderr)"

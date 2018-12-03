@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rancher/kontainer-engine-tke-driver/tencentcloud/ccs"
 	"github.com/rancher/kontainer-engine/drivers/options"
 	"github.com/rancher/kontainer-engine/drivers/util"
 	"github.com/rancher/kontainer-engine/types"
-	"github.com/rancher/rancher-tke-driver/tencentcloud/ccs"
 	"github.com/rancher/rke/log"
 	"github.com/sirupsen/logrus"
 	tccommon "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -23,62 +23,130 @@ import (
 )
 
 const (
-	runningStatus  = "Success"
-	failedStatus   = "Failed"
-	notReadyStatus = "ClusterNotReadyError"
+	runningStatus        = "Running"
+	successStatus        = "Success"
+	failedStatus         = "Failed"
+	notReadyStatus       = "ClusterNotReadyError"
 	processRunningStatus = "ProcessAlreadyRunning"
-	retries        = 5
-	pollInterval   = 30
+	retries              = 5
+	pollInterval         = 30
 )
 
-// Driver defines the struct of gke driver
+// Driver defines the struct of tke driver
 type Driver struct {
 	driverCapabilities types.Capabilities
 }
 
+// GetK8SCapabilities defines TKE k8s capabilities
+func (d *Driver) GetK8SCapabilities(ctx context.Context, opts *types.DriverOptions) (*types.K8SCapabilities, error) {
+	capabilities := &types.K8SCapabilities{
+		L4LoadBalancer: &types.LoadBalancerCapabilities{
+			Enabled:              true,
+			Provider:             "Tencent Cloud L4 LB",
+			ProtocolsSupported:   []string{"TCP", "UDP"},
+			HealthCheckSupported: true,
+		},
+	}
+
+	capabilities.IngressControllers = []*types.IngressCapabilities{
+		{
+			IngressProvider:      "Tencent Cloud Ingress",
+			CustomDefaultBackend: true,
+		},
+	}
+	return capabilities, nil
+}
+
 type state struct {
 	// The id of the cluster
-	ClusterId string
+	ClusterID string
 	// The name of the cluster
 	ClusterName string
-	// The vpc id of the cluster
-	VpcId string
-	// Create a empty cluster
-	EmptyCluster bool
-	// CIDR used to assign cluster containers and service IPs must not conflict with VPC CIDR or with other cluster CIDRs in the same VPC (*required)
-	ClusterCIDR string
 	// The description of the cluster
 	ClusterDesc string
-	// The version of the cluster
-	ClusterVersion string
-	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
-	// the extension node will also automatically use this system (*required)
-	OsName string
-	// The project ID of the cluster
-	ProjectId int64
+	// CIDR used to assign cluster containers and service IPs must not conflict with VPC CIDR or with other cluster CIDRs in the same VPC (*required)
+	ClusterCIDR string
 	// Whether to ignore the ClusterCIDR conflict error, the default is 0
 	// 0: Do not ignore the conflict (and return an error); 1: Ignore the conflict (continue to create)
 	IgnoreClusterCIDRConflict int64
-	// The cluster master occupies the IP of a VPC subnet. This parameter specifies which subnet the IP is occupied by the master.
-	// This subnet must be in the same VPC as the cluster.
-	MasterSubnetId string
-
+	// The version of the cluster
+	ClusterVersion string
+	// Create a empty cluster
+	EmptyCluster bool
 	// The region of the cluster
 	Region string
-	// The zone id of the cluster
-	ZoneId string
 	// The secret id used for authentication
 	SecretID string
 	// The secret key used for authentication
 	SecretKey string
+	// cluster state
+	State string
+	// The project ID of the cluster
+	ProjectID int64
+
+	// The zone id of the cluster
+	ZoneID string
+	// The number of nodes purchased, up to 100
+	GoodsNum int64
+	// CPU core number
+	CPU int64
+	// Memory size (GB)
+	Mem int64
+	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
+	// the extension node will also automatically use this system (*required)
+	OsName string
+	// See CVM Instance Configuration for details . Default: S1.SMALL1
+	InstanceType string
+	// The type of node, the default is PayByHour
+	// another option is PayByMonth
+	CvmType string
+	// The annual renewal fee for the annual subscription, default to NOTIFY_AND_AUTO_RENEW
+	RenewFlag string
+	// Type of bandwidth
+	// PayByMonth vm: PayByMonth, PayByTraffic,
+	// PayByHour vm: PayByHour, PayByTraffic
+	BandwidthType string
+	// Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak
+	Bandwidth int64
+	// Whether to open the public network IP, 0: not open 1: open
+	WanIP int64
+	// Private network ID
+	VpcID string
+	// Subnet ID
+	SubnetID string
+	// Whether it is a public network gateway
+	// 0: non-public network gateway
+	// 1: public network gateway
+	IsVpcGateway int64
+	// system disk size. linux system adjustment range is 20 - 50g, step size is 1
+	RootSize int64
+	// System disk type. System disk type restrictions are detailed in the CVM instance configuration.
+	// default value of the SSD cloud drive : CLOUD_BASIC.
+	RootType string
+	// Data disk size (GB)
+	StorageSize int64
+	// Data disk type
+	StorageType string
+	// Node password
+	Password string
+	// Key ID
+	KeyID string
+	// The annual subscription period of the annual subscription month, unit month. This parameter is required when cvmType is PayByMonth
+	Period int64
+	// Security group ID, default does not bind any security groups, please fill out the inquiry list of security groups sgId field interface returned
+	SgID string
+	// The cluster master occupies the IP of a VPC subnet. This parameter specifies which subnet the IP is occupied by the master.
+	// This subnet must be in the same VPC as the cluster.
+	MasterSubnetID string
+	// Base64-encoded user script, which is executed after the k8s component is run. The user is required to guarantee the reentrant and retry logic of the script.
+	// The script and its generated log file can be viewed in the /data/ccs_userscript/ path of the node.
+	UserScript string
 
 	// cluster info
 	ClusterInfo types.ClusterInfo
-
-	// cluster state
-	State string
 }
 
+// NewDriver init the TKE driver
 func NewDriver() types.Driver {
 	logrus.Println("init new driver")
 	driver := &Driver{
@@ -91,6 +159,7 @@ func NewDriver() types.Driver {
 	driver.driverCapabilities.AddCapability(types.SetVersionCapability)
 	driver.driverCapabilities.AddCapability(types.GetClusterSizeCapability)
 	driver.driverCapabilities.AddCapability(types.SetClusterSizeCapability)
+
 	return driver
 }
 
@@ -99,69 +168,146 @@ func (d *Driver) GetDriverCreateOptions(ctx context.Context) (*types.DriverFlags
 	driverFlag := types.DriverFlags{
 		Options: make(map[string]*types.Flag),
 	}
-	driverFlag.Options["cluster-name"] = &types.Flag{
+	driverFlag.Options["name"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "The name of the cluster that should be displayed to the user",
-	}
-	driverFlag.Options["vpc-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The private vpc id of the cluster",
-	}
-	driverFlag.Options["empty-cluster"] = &types.Flag{
-		Type:  types.BoolType,
-		Usage: "Create a empty cluster",
-	}
-	driverFlag.Options["cluster-cidr"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The IP address range of the container pods, must not conflict with VPC CIDR",
-	}
-	driverFlag.Options["cluster-desc"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The description of the cluster",
-	}
-	driverFlag.Options["cluster-version"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The version of the cluster",
+		Usage: "the internal name of the cluster in Rancher",
 	}
 	driverFlag.Options["secret-id"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The secretID",
 	}
 	driverFlag.Options["secret-key"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The version of the cluster",
+		Type:     types.StringType,
+		Password: true,
+		Usage:    "The version of the cluster",
 	}
-	driverFlag.Options["os-name"] = &types.Flag{
+	driverFlag.Options["cluster-name"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "The name of the operating system , currently supports Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64",
+		Usage: "The name of the cluster that should be displayed to the user",
 	}
-	driverFlag.Options["project-id"] = &types.Flag{
-		Type:  types.IntType,
-		Usage: "the ID of your project to use when creating a cluster",
+	driverFlag.Options["cluster-desc"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The description of the cluster",
+	}
+	driverFlag.Options["cluster-cidr"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The IP address range of the container pods, must not conflict with VPC CIDR",
 	}
 	driverFlag.Options["ignore-cluster-cidr-conflict"] = &types.Flag{
 		Type:  types.BoolType,
 		Usage: "Whether to ignore the ClusterCIDR conflict error, the default is 0",
 	}
-	driverFlag.Options["master-subnet-id"] = &types.Flag{
+	driverFlag.Options["cluster-version"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "The cluster master occupies the IP of a VPC subnet",
+		Usage: "The version of the cluster",
 	}
-	driverFlag.Options["secret-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The secret id used to identify the identity of the API caller",
-	}
-	driverFlag.Options["secret-key"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The key used to encrypt the signature string and the server-side verification signature string",
+	driverFlag.Options["empty-cluster"] = &types.Flag{
+		Type:  types.BoolType,
+		Usage: "Create a empty cluster",
 	}
 	driverFlag.Options["region"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The region of the cluster",
 	}
+	driverFlag.Options["project-id"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The ID of your project to use when creating a cluster",
+	}
 	driverFlag.Options["zoneId"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The zone id of the cluster",
+	}
+	driverFlag.Options["goods-num"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The number of nodes purchased, up to 100",
+	}
+	driverFlag.Options["cpu"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Cpu core number",
+	}
+	driverFlag.Options["mem"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Memory size (GB)",
+	}
+	driverFlag.Options["os-name"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The name of the operating system , currently supports Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64",
+	}
+	driverFlag.Options["instance-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "See CVM Instance Configuration for details . Default: S1.SMALL1",
+	}
+	driverFlag.Options["cvm-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The type of node, the default is charged by volume ",
+	}
+	driverFlag.Options["renew-flag"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The annual renewal fee for the annual subscription, default to NOTIFY_AND_AUTO_RENEW",
+	}
+	driverFlag.Options["bandwidth-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Type of bandwidth",
+	}
+	driverFlag.Options["bandwidth"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak",
+	}
+	driverFlag.Options["wan-ip"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "the cluster master occupies the IP of a VPC subnet",
+	}
+	driverFlag.Options["vpc-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Private network ID, please fill out the inquiry list private network interface returned unVpcId (private network unified ID) field",
+	}
+	driverFlag.Options["subnet-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Subnet ID, please fill out the inquiry list of subnets interface returned unSubnetId (unified subnet ID) field",
+	}
+	driverFlag.Options["is-vpc-gateway"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Whether it is a public network gateway, network gateway only in public with a public IP, and in order to work properly when under private network",
+	}
+	driverFlag.Options["root-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "System disk size. Linux system adjustment range is 20 - 50G, step size is 1",
+	}
+	driverFlag.Options["root-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "System disk type. System disk type restrictions are detailed in the CVM instance configuration",
+	}
+	driverFlag.Options["storage-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Data disk size (GB), the step size is 10",
+	}
+	driverFlag.Options["storage-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Data disk type, default value of the SSD cloud drive",
+	}
+	driverFlag.Options["password"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Node password. If it is not set, it will be randomly generated and sent by the station letter",
+	}
+	driverFlag.Options["key-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Key id, after associating the key can be used to logging to the node",
+	}
+	driverFlag.Options["period"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The annual subscription period of the annual subscription month, unit month. This parameter is required when cvmType is PayByMonth",
+	}
+	driverFlag.Options["sg-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Security group ID, default does not bind any security groups",
+	}
+	driverFlag.Options["master-subnet-id"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "the cluster master occupies the IP of a VPC subnet",
+	}
+	driverFlag.Options["user-script"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Base64-encoded user script, which is executed after the k8s component is run.",
 	}
 	return &driverFlag, nil
 }
@@ -185,59 +331,83 @@ func (d *Driver) GetDriverUpdateOptions(ctx context.Context) (*types.DriverFlags
 	}
 	driverFlag.Options["cluster-desc"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "the description of the cluster",
+		Usage: "The description of the cluster",
 	}
 	driverFlag.Options["secret-id"] = &types.Flag{
 		Type:  types.StringType,
-		Usage: "the secretID of the cluster",
+		Usage: "The secretID of the cluster",
 	}
 	driverFlag.Options["secret-key"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "the secretKey of the cluster",
+		Type:     types.StringType,
+		Password: true,
+		Usage:    "The secretKey of the cluster",
 	}
 	return &driverFlag, nil
 }
 
-// SetDriverOptions implements driver interface
+// getStateFromOpts gets input values from opts
 func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
 	d := &state{
 		ClusterInfo: types.ClusterInfo{
 			Metadata: map[string]string{},
 		},
 	}
-	d.ClusterId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-id", "clusterId").(string)
 	d.ClusterName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-name", "clusterName").(string)
-	d.EmptyCluster = options.GetValueFromDriverOptions(driverOptions, types.BoolType, "empty-cluster", "emptyCluster").(bool)
-	d.VpcId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "vpc-id", "vpcId").(string)
-	d.ClusterCIDR = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-cidr", "clusterCIDR").(string)
 	d.ClusterDesc = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-desc", "clusterDesc").(string)
-	d.ClusterVersion = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-version", "clusterVersion").(string)
-	d.OsName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "os-name", "osName").(string)
-	d.ProjectId = options.GetValueFromDriverOptions(driverOptions, types.IntType, "project-id", "projectId").(int64)
+	d.ClusterCIDR = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-cidr", "clusterCidr").(string)
 	d.IgnoreClusterCIDRConflict = 0
-	if options.GetValueFromDriverOptions(driverOptions, types.BoolType, "ingore-cluster-cidr-conflict", "ignoreClusterCIDRConflict").(bool) {
+	if options.GetValueFromDriverOptions(driverOptions, types.BoolType, "ingore-cluster-cidr-conflict", "ignoreClusterCidrConflict").(bool) {
 		d.IgnoreClusterCIDRConflict = 1
 	}
-	d.MasterSubnetId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "master-subnet-id", "masterSubnetId").(string)
+	d.ClusterVersion = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-version", "clusterVersion").(string)
+	d.EmptyCluster = false
+	if options.GetValueFromDriverOptions(driverOptions, types.BoolType, "empty-cluster", "emptyCluster").(bool) == true {
+		d.EmptyCluster = true
+	}
+	d.Region = options.GetValueFromDriverOptions(driverOptions, types.StringType, "region").(string)
 	d.SecretID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "secret-id", "secretId").(string)
 	d.SecretKey = options.GetValueFromDriverOptions(driverOptions, types.StringType, "secret-key", "secretKey").(string)
-	d.Region = options.GetValueFromDriverOptions(driverOptions, types.StringType, "region").(string)
-	d.ZoneId = options.GetValueFromDriverOptions(driverOptions, types.StringType, "zone-id", "zoneId").(string)
+	d.ProjectID = options.GetValueFromDriverOptions(driverOptions, types.IntType, "project-id", "projectId").(int64)
+
+	d.ZoneID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "zone-id", "zoneId").(string)
+	d.GoodsNum = options.GetValueFromDriverOptions(driverOptions, types.IntType, "goods-num", "goodsNum").(int64)
+	d.CPU = options.GetValueFromDriverOptions(driverOptions, types.IntType, "cpu").(int64)
+	d.Mem = options.GetValueFromDriverOptions(driverOptions, types.IntType, "mem").(int64)
+	d.OsName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "os-name", "osName").(string)
+	d.InstanceType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "instance-type", "instanceType").(string)
+	d.CvmType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cvm-type", "cvmType").(string)
+	d.RenewFlag = options.GetValueFromDriverOptions(driverOptions, types.StringType, "renew-flag", "renewFlag").(string)
+	d.BandwidthType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "bandwidth-type", "bandwidthType").(string)
+	d.Bandwidth = options.GetValueFromDriverOptions(driverOptions, types.IntType, "bandwidth", "bandwidth").(int64)
+	d.WanIP = options.GetValueFromDriverOptions(driverOptions, types.IntType, "wan-ip", "wanIp").(int64)
+	d.VpcID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "vpc-id", "vpcId").(string)
+	d.SubnetID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "subnet-id", "subnetId").(string)
+	d.IsVpcGateway = options.GetValueFromDriverOptions(driverOptions, types.IntType, "is-vpc-gateway", "isVpcGateway").(int64)
+	d.RootSize = options.GetValueFromDriverOptions(driverOptions, types.IntType, "root-size", "rootSize").(int64)
+	d.RootType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "root-type", "rootType").(string)
+	d.StorageSize = options.GetValueFromDriverOptions(driverOptions, types.IntType, "storage-size", "storageSize").(int64)
+	d.StorageType = options.GetValueFromDriverOptions(driverOptions, types.StringType, "storage-type", "storageType").(string)
+	d.Password = options.GetValueFromDriverOptions(driverOptions, types.StringType, "password").(string)
+	d.KeyID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "key-id", "keyId").(string)
+	d.Period = options.GetValueFromDriverOptions(driverOptions, types.IntType, "period").(int64)
+	d.SgID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "sg-id", "sgId").(string)
+	d.MasterSubnetID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "master-subnet-id", "masterSubnetId").(string)
+	d.UserScript = options.GetValueFromDriverOptions(driverOptions, types.StringType, "user-script", "userScript").(string)
 
 	return d, d.validate()
 }
 
 func (s *state) validate() error {
 	if s.ClusterName == "" {
-		return fmt.Errorf("cluster name is required")
+		return fmt.Errorf("clusterName is required")
 	} else if s.ClusterCIDR == "" {
-		return fmt.Errorf("cluster ipv4 cidr is required")
+		return fmt.Errorf("clusterCidr is required")
 	} else if s.SecretID == "" {
-		return fmt.Errorf("client secretID is required")
+		return fmt.Errorf("secretID is required")
 	} else if s.SecretKey == "" {
-		return fmt.Errorf("client secretKey is required")
+		return fmt.Errorf("secretKey is required")
 	} else if s.Region == "" {
-		return fmt.Errorf("cluster region is required")
+		return fmt.Errorf("region is required")
 	}
 	return nil
 }
@@ -258,7 +428,7 @@ func (d *Driver) getTKEServiceClient(ctx context.Context, state *state, method s
 	return client, nil
 }
 
-// Create implements driver interface
+// Create implements driver create interface
 func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types.ClusterInfo) (*types.ClusterInfo, error) {
 	state, err := getStateFromOpts(opts)
 	if err != nil {
@@ -282,18 +452,10 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 		return nil, err
 	}
 
-	if err != nil && !strings.Contains(err.Error(), "AlreadyExist") {
-		return nil, err
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
 	if err == nil {
-		fmt.Printf("resp data str: %s\n", resp.ToJsonString())
-		state.ClusterId = *resp.Data.ClusterId
-		logrus.Info("Cluster %s create is called for region %s and zone %s. Status Code %v", state.ClusterId, state.Region, state.ZoneId, resp.Code)
+		state.ClusterID = resp.Data.ClusterID
+		fmt.Printf("resp data str: %s\n", state.ClusterID)
+		logrus.Debugf("Cluster %s create is called for region %s and zone %s. Status Code %v", state.ClusterID, state.Region, state.ZoneID, resp.Code)
 	}
 
 	if err := d.waitTKECluster(ctx, svc, state); err != nil {
@@ -311,7 +473,7 @@ func (d *Driver) getWrapCreateClusterRequest(state *state) (*ccs.CreateClusterRe
 	if err != nil {
 		return nil, err
 	}
-	err = request.FromJsonString(string(content))
+	err = request.FromJSONString(string(content))
 	if err != nil {
 		return nil, err
 	}
@@ -321,33 +483,29 @@ func (d *Driver) getWrapCreateClusterRequest(state *state) (*ccs.CreateClusterRe
 func (d *Driver) waitTKECluster(ctx context.Context, svc *ccs.Client, state *state) error {
 	lastMsg := ""
 	for {
-		cluster, err := d.getCluster(svc, state)
+		cluster, err := getCluster(svc, state)
 		if err != nil && !strings.Contains(err.Error(), notReadyStatus) {
 			return err
 		}
 
-		//if cluster.CodeDesc != nil {
-
 		if cluster.CodeDesc != lastMsg {
-			log.Infof(ctx, "provisioning cluster %s:%s", state.ClusterName, cluster.CodeDesc)
+			log.Infof(ctx, "provisioning cluster %s: %s", state.ClusterName, cluster.CodeDesc)
 			lastMsg = cluster.CodeDesc
 		}
 
-
-		if cluster.CodeDesc == runningStatus {
-			log.Infof(ctx, "Cluster %v is running", state.ClusterName)
+		if cluster.Data.Clusters[0].Status == runningStatus {
+			log.Infof(ctx, "cluster %v is running", state.ClusterName)
 			return nil
-		} else if cluster.CodeDesc == failedStatus {
-			return fmt.Errorf("tencent cloud failed to provision cluster: %s\n", cluster.Message)
+		} else if cluster.Data.Clusters[0].Status == failedStatus {
+			return fmt.Errorf("tencent cloud failed to provision cluster: %s", cluster.Message)
 		}
-		//}
-		time.Sleep(time.Second * 25)
+		time.Sleep(time.Second * 15)
 	}
 }
 
-func (d *Driver) getCluster(svc *ccs.Client, state *state) (*ccs.DescribeClusterResponse, error) {
+func getCluster(svc *ccs.Client, state *state) (*ccs.DescribeClusterResponse, error) {
 	logrus.Infof("invoking getCluster")
-	req, err := d.getWrapDescribeClusterRequest(state)
+	req, err := getWrapDescribeClusterRequest(state)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +522,7 @@ func (d *Driver) getCluster(svc *ccs.Client, state *state) (*ccs.DescribeCluster
 	return resp, nil
 }
 
-func (d *Driver) getWrapDescribeClusterRequest(state *state) (*ccs.DescribeClusterRequest, error) {
+func getWrapDescribeClusterRequest(state *state) (*ccs.DescribeClusterRequest, error) {
 	logrus.Info("invoking describeCluster")
 	request := ccs.NewDescribeClusterRequest()
 	request.Limit = 20
@@ -372,7 +530,7 @@ func (d *Driver) getWrapDescribeClusterRequest(state *state) (*ccs.DescribeClust
 	if err != nil {
 		return nil, err
 	}
-	err = request.FromJsonString(string(content))
+	err = request.FromJSONString(string(content))
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +546,7 @@ func storeState(info *types.ClusterInfo, state *state) error {
 		info.Metadata = map[string]string{}
 	}
 	info.Metadata["state"] = string(bytes)
-	info.Metadata["project-id"] = string(state.ProjectId)
+	info.Metadata["project-id"] = string(state.ProjectID)
 	info.Metadata["zone"] = state.Region
 	return nil
 }
@@ -400,7 +558,7 @@ func getState(info *types.ClusterInfo) (*state, error) {
 	return state, err
 }
 
-// Update implements driver interface
+// Update implements driver update interface
 func (d *Driver) Update(ctx context.Context, info *types.ClusterInfo, opts *types.DriverOptions) (*types.ClusterInfo, error) {
 	logrus.Info("unimplemented")
 	return nil, fmt.Errorf("not implemented")
@@ -414,7 +572,7 @@ func getClusterCerts(svc *ccs.Client, state *state) (*ccs.DescribeClusterSecurit
 	if err != nil {
 		return nil, err
 	}
-	err = request.FromJsonString(string(content))
+	err = request.FromJSONString(string(content))
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +585,7 @@ func getClusterCerts(svc *ccs.Client, state *state) (*ccs.DescribeClusterSecurit
 	return resp, nil
 }
 
-// PostCheck implements driver interface
+// PostCheck implements driver postCheck interface
 func (d *Driver) PostCheck(ctx context.Context, info *types.ClusterInfo) (*types.ClusterInfo, error) {
 	logrus.Infof("Starting post-check")
 	state, err := getState(info)
@@ -443,7 +601,7 @@ func (d *Driver) PostCheck(ctx context.Context, info *types.ClusterInfo) (*types
 		return nil, err
 	}
 
-	cluster, err := d.getCluster(svc, state)
+	cluster, err := getCluster(svc, state)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +612,7 @@ func (d *Driver) PostCheck(ctx context.Context, info *types.ClusterInfo) (*types
 	}
 
 	if certs.Data.ClusterExternalEndpoint == "" {
-		err := d.operateClusterVip(ctx, svc, state.ClusterId, "Create")
+		err := d.operateClusterVip(ctx, svc, state.ClusterID, "Create")
 		if err != nil {
 			return nil, err
 		}
@@ -515,7 +673,7 @@ func (d *Driver) PostCheck(ctx context.Context, info *types.ClusterInfo) (*types
 	return info, nil
 }
 
-// Remove implements driver interface
+// Remove implements driver remove interface
 func (d *Driver) Remove(ctx context.Context, info *types.ClusterInfo) error {
 	state, err := getState(info)
 	if err != nil {
@@ -526,7 +684,7 @@ func (d *Driver) Remove(ctx context.Context, info *types.ClusterInfo) error {
 		return err
 	}
 
-	logrus.Debugf("Removing cluster %v from region %v, zone %v", state.ClusterName, state.Region, state.ZoneId)
+	logrus.Debugf("Removing cluster %v from region %v, zone %v", state.ClusterName, state.Region, state.ZoneID)
 
 	req, err := d.getWrapRemoveClusterRequest(state)
 	if err != nil {
@@ -550,17 +708,19 @@ func (d *Driver) getWrapRemoveClusterRequest(state *state) (*ccs.DeleteClusterRe
 	if err != nil {
 		return nil, err
 	}
-	err = request.FromJsonString(string(content))
+	err = request.FromJSONString(string(content))
 	if err != nil {
 		return nil, err
 	}
 	return request, nil
 }
 
+// GetCapabilities implements driver get capabilities interface
 func (d *Driver) GetCapabilities(ctx context.Context) (*types.Capabilities, error) {
 	return &d.driverCapabilities, nil
 }
 
+// GetClusterSize implements driver get cluster size interface
 func (d *Driver) GetClusterSize(ctx context.Context, info *types.ClusterInfo) (*types.NodeCount, error) {
 	state, err := getState(info)
 	if err != nil {
@@ -570,13 +730,14 @@ func (d *Driver) GetClusterSize(ctx context.Context, info *types.ClusterInfo) (*
 	if err != nil {
 		return nil, err
 	}
-	clusters, err := d.getCluster(svc, state)
+	clusters, err := getCluster(svc, state)
 	if err != nil {
 		return nil, err
 	}
 	return &types.NodeCount{Count: clusters.Data.Clusters[0].NodeNum}, nil
 }
 
+// GetVersion implements driver get cluster kubernetes version interface
 func (d *Driver) GetVersion(ctx context.Context, info *types.ClusterInfo) (*types.KubernetesVersion, error) {
 	state, err := getState(info)
 	if err != nil {
@@ -586,20 +747,19 @@ func (d *Driver) GetVersion(ctx context.Context, info *types.ClusterInfo) (*type
 	if err != nil {
 		return nil, err
 	}
-	resp, err := d.getCluster(svc, state)
+	resp, err := getCluster(svc, state)
 	if err != nil {
 		return nil, err
 	}
 	return &types.KubernetesVersion{Version: resp.Data.Clusters[0].K8sVersion}, nil
 }
 
-
 // operateClusterVip creates or remove the cluster vip
-func (d * Driver)operateClusterVip(ctx context.Context, svc *ccs.Client, clusterId, operation string) error {
+func (d *Driver) operateClusterVip(ctx context.Context, svc *ccs.Client, clusterID, operation string) error {
 	logrus.Infof("invoking operateClusterVip")
 
 	req := ccs.NewOperateClusterVipRequest()
-	req.ClusterId = clusterId
+	req.ClusterID = clusterID
 	req.Operation = operation
 
 	count := 0
@@ -613,7 +773,7 @@ func (d * Driver)operateClusterVip(ctx context.Context, svc *ccs.Client, cluster
 			fmt.Printf("An API error has returned: %s\n", err)
 		}
 
-		if resp.CodeDesc == runningStatus && count >= 1 {
+		if resp.CodeDesc == successStatus && count >= 1 {
 			return nil
 		}
 		count++
@@ -622,12 +782,13 @@ func (d * Driver)operateClusterVip(ctx context.Context, svc *ccs.Client, cluster
 	}
 }
 
-
+// SetClusterSize implements driver set cluster size interface
 func (d *Driver) SetClusterSize(ctx context.Context, info *types.ClusterInfo, count *types.NodeCount) error {
 	logrus.Info("unimplemented")
 	return nil
 }
 
+// SetVersion implements driver set cluster kubernetes version interface
 func (d *Driver) SetVersion(ctx context.Context, info *types.ClusterInfo, version *types.KubernetesVersion) error {
 	logrus.Info("unimplemented")
 	return nil

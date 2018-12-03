@@ -6,378 +6,429 @@ import (
 	tchttp "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/http"
 )
 
+// CreateClusterRequest defines create cluster request parameters
 type CreateClusterRequest struct {
 	*tchttp.BaseRequest
-	// 集群名称
-	ClusterName *string `json:"clusterName" name:"clusterName"`
-	// 集群描述
-	ClusterDesc *string `json:"clusterDesc" name:"clusterDesc"`
-	// 用于分配集群容器和服务 IP 的 CIDR，不得与 VPC CIDR 冲突，也不得与同 VPC 内其他集群 CIDR 冲突
-	ClusterCIDR *string `json:"clusterCIDR" name:"clusterCIDR"`
-	// 是否忽略 ClusterCIDR 冲突错误，默认为 0
-	// 0：不忽略冲突（并返回错误）
-	// 1：忽略冲突（继续创建）
-	IgnoreClusterCIDRConflict *int `json:"ignoreClusterCIDRConflict" name:"ignoreClusterCIDRConflict"`
-	//
-	ZoneId *string `json:"zoneId" name:"zoneId"`
-	//
-	GoodsNum *int `json:"goodsNum" name:"goodsNum"`
-	//
-	Cpu *int `json:"cpu" name:"cpu"`
-	//
-	Mem *int `json:"mem" name:"mem"`
-	// 系统名。CentOS7.2x86_64 或者 Ubuntu16.04.1 LTSx86_64，集群下所有节点都使用此系统，扩展节点也会自动使用此系统
-	OsName *string `json:"osName" name:"osName"`
-	//
-	InstanceType *string `json:"instanceType" name:"instanceType"`
-	//
-	CvmType *string `json:"cvmType" name:"cvmType"`
-	//
-	RenewFlag *string `json:"renewFlag" name:"renewFlag"`
-	//
-	BandwidthType *string `json:"bandwidthType" name:"bandwidthType"`
-	//
-	Bandwidth *int `json:"bandwidth" name:"bandwidth"`
-	//
-	WanIp *int `json:"wanIp" name:"wanIp"`
-	// 私有网络 ID，请填写 查询私有网络列表 接口中返回的 unVpcId ( 私有网络统一 ID )字段
-	VpcId *string `json:"vpcId" name:"vpcId"`
-	//
-	SubnetId *string `json:"subnetId" name:"subnetId"`
-	//
-	IsVpcGateway *int `json:"isVpcGateway" name:"isVpcGateway"`
-	//
-	RootSize *int `json:"rootSize" name:"rootSize"`
-	//
-	RootType *string `json:"rootType" name:"rootType"`
-	//
-	StorageSize *int `json:"storageSize" name:"storageSize"`
-	//
-	StorageType *string `json:"storageType" name:"storageType"`
-	//
-	Password *string `json:"password" name:"password"`
-	//
-	KeyId *string `json:"keyId" name:"keyId"`
-	//
-	Period *string `json:"period" name:"period"`
-	// 集群 Master 会占用一个 VPC 子网的 IP，该参数指定 Master 占用的 IP 所在哪个子网。该子网必须与集群存在同一个 VPC 内
-	MasterSubnetId *string `json:"masterSubnetId" name:"masterSubnetId"`
-	//
-	SgId *string `json:"sgId" name:"sgId"`
-	//
-	UserScript *string `json:"userScript" name:"userScript"`
-	// 集群版本
-	ClusterVersion *string `json:"clusterVersion" name:"clusterVersion"`
-	// 集群所属项目 ID
-	ProjectId *int `json:"projectId" name:"projectId"`
+	// The name of the cluster
+	ClusterName string `json:"clusterName" name:"clusterName"`
+	// The description of the cluster
+	ClusterDesc string `json:"clusterDesc" name:"clusterDesc"`
+	// CIDR used to assign cluster containers and service IPs must not conflict with VPC CIDR or with other cluster CIDRs in the same VPC (*required)
+	ClusterCIDR string `json:"clusterCIDR" name:"clusterCIDR"`
+	// Whether to ignore the ClusterCIDR conflict error, the default is 0
+	// 0: Do not ignore the conflict (and return an error); 1: Ignore the conflict (continue to create)
+	IgnoreClusterCIDRConflict int64 `json:"ignoreClusterCidrConflict" name:"ignoreClusterCidrConflict"`
+	// The zone id of the cluster
+	ZoneID string `json:"zoneId" name:"zoneId"`
+	// The number of nodes purchased, up to 100
+	GoodsNum int64 `json:"goodsNum" name:"goodsNum"`
+	// CPU core number
+	CPU int64 `json:"cpu" name:"cpu"`
+	// Memory size (GB)
+	Mem int64 `json:"mem" name:"mem"`
+	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
+	// the extension node will also automatically use this system (*required)
+	OsName string `json:"osName" name:"osName"`
+	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
+	// the extension node will also automatically use this system (*required)
+	InstanceType string `json:"instanceType" name:"instanceType"`
+	// See CVM Instance Configuration for details . Default: S1.SMALL1
+	CvmType string `json:"cvmType" name:"cvmType"`
+	// The annual renewal fee for the annual subscription, default to NOTIFY_AND_AUTO_RENEW
+	RenewFlag string `json:"renewFlag" name:"renewFlag"`
+	// Type of bandwidth
+	// PayByMonth vm: PayByMonth, PayByTraffic,
+	// PayByHour vm: PayByHour, PayByTraffic
+	BandwidthType string `json:"bandwidthType" name:"bandwidthType"`
+	// Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak
+	Bandwidth int64 `json:"bandwidth" name:"bandwidth"`
+	// Whether to open the public network IP, 0: not open 1: open
+	WanIP int64 `json:"wanIp" name:"wanIp"`
+	// Private network ID
+	VpcID string `json:"vpcId" name:"vpcId"`
+	// Subnet ID
+	SubnetID string `json:"subnetId" name:"subnetId"`
+	// Whether it is a public network gateway
+	// 0: non-public network gateway
+	// 1: public network gateway
+	IsVpcGateway int64 `json:"isVpcGateway" name:"isVpcGateway"`
+	// system disk size. linux system adjustment range is 20 - 50g, step size is 1
+	RootSize int64 `json:"rootSize" name:"rootSize"`
+	// System disk type. System disk type restrictions are detailed in the CVM instance configuration.
+	// default value of the SSD cloud drive : CLOUD_BASIC.
+	RootType string `json:"rootType" name:"rootType"`
+	// Data disk size (GB)
+	StorageSize int64 `json:"storageSize" name:"storageSize"`
+	// Data disk type
+	StorageType string `json:"storageType" name:"storageType"`
+	// Node password
+	Password string `json:"password" name:"password"`
+	// Key id
+	KeyID string `json:"keyId" name:"keyId"`
+	// The annual subscription period of the annual subscription month, unit month. This parameter is required when cvmType is PayByMonth
+	Period int64 `json:"period" name:"period"`
+	// The cluster master occupies the IP of a VPC subnet. This parameter specifies which subnet the IP is occupied by the master.
+	// This subnet must be in the same VPC as the cluster.
+	MasterSubnetID string `json:"masterSubnetId" name:"masterSubnetId"`
+	// Security group ID, default does not bind any security groups, please fill out the inquiry list of security groups sgId field interface returned
+	SgID string `json:"sgId" name:"sgId"`
+	// Base64-encoded user script, which is executed after the k8s component is run. The user is required to guarantee the reentrant and retry logic of the script.
+	UserScript string `json:"userScript" name:"userScript"`
+	// K8S cluster version
+	ClusterVersion string `json:"clusterVersion" name:"clusterVersion"`
+	// Project ID
+	ProjectID int64 `json:"projectId" name:"projectId"`
 }
 
-func (r *CreateClusterRequest) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *CreateClusterRequest) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *CreateClusterRequest) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *CreateClusterRequest) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// CreateClusterResponse defines create cluster response
 type CreateClusterResponse struct {
 	*tchttp.BaseResponse
-	// 公共错误码。0 表示成功，其他值表示失败
-	Code *int `json:"code" name:"code"`
-	// 模块错误信息描述，与接口相关
-	Message *string `json:"message" name:"message"`
-	// 业务侧错误码。成功时返回 Success，错误时返回具体业务错误原因
-	CodeDesc *string `json:"codeDesc" name:"codeDesc"`
-	// 集群参数
+	// Public error code. 0 means success, other values ​​indicate failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
+	Message string `json:"message" name:"message"`
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
+	CodeDesc string `json:"codeDesc" name:"codeDesc"`
+	// Cluster data
 	Data struct {
-		// 任务 ID
-		RequestId *int `json:"requestId" name:"requestId"`
-		// 集群 ID
-		ClusterId *string `json:"clusterId" name:"clusterId"`
+		// Request ID
+		RequestID int64 `json:"requestId" name:"requestId"`
+		// Cluster ID
+		ClusterID string `json:"clusterId" name:"clusterId"`
 	} `json:"data"`
 }
 
-func (r *CreateClusterResponse) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *CreateClusterResponse) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *CreateClusterResponse) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *CreateClusterResponse) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// DescribeClusterInstancesRequest defines cluster instance request
 type DescribeClusterInstancesRequest struct {
 	*tchttp.BaseRequest
-	//集群 ID
-	ClusterId *string `json:"clusterId" name:"clusterId"`
-	// 偏移量，默认 0
-	Offset *string `json:"clusterDesc" name:"clusterDesc"`
-	// 最大输出条数，默认 20
-	Limit *string `json:"clusterCIDR" name:"clusterCIDR"`
-	// 命名空间，默认为 default
-	Namespace *string `json:"ignoreClusterCIDRConflict" name:"ignoreClusterCIDRConflict"`
-	// 实例列表，默认为空
-	instancesId *[]string `json:"zoneId" name:"zoneId"`
+	//Cluster ID
+	ClusterID string `json:"clusterId" name:"clusterId"`
+	// Offset, default 0
+	Offset string `json:"offset" name:"offset"`
+	// Maximum output number, default 20
+	Limit string `json:"limit" name:"limit"`
+	// Namespace, default is default
+	Namespace string `json:"Namespace" name:"namespace"`
+	// List of instances, default is empty
+	InstancesID []string `json:"instancesId" name:"instancesId"`
 }
 
-func (r *DescribeClusterInstancesRequest) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DescribeClusterInstancesRequest) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DescribeClusterInstancesRequest) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DescribeClusterInstancesRequest) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
+
+// DescribeClusterInstancesResponse defines describe cluster instance response
 type DescribeClusterInstancesResponse struct {
 	*tchttp.BaseResponse
-	// 集群参数
+	// Cluster data
 	Data struct {
-		// 集群节点总数
-		TotalCount *int64 `json:"totalCount" name:"totalCount"`
-		// 集群 ID
-		Nodes *[] Node `json:"nodes" name:"nodes"`
+		// Total number of cluster nodes
+		TotalCount int64 `json:"totalCount" name:"totalCount"`
+		// Node list, details are as follows
+		Nodes []Node `json:"nodes" name:"nodes"`
 	} `json:"data"`
-	// 公共错误码。0 表示成功，其他值表示失败
-	Code *int `json:"code" name:"code"`
-	// 模块错误信息描述，与接口相关
-	Message *string `json:"message" name:"message"`
-	// 业务侧错误码。成功时返回 Success，错误时返回具体业务错误原因
-	CodeDesc *string `json:"codeDesc" name:"codeDesc"`
+	// Public error code. 0 means success, other values ​​indicate failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to interface
+	Message string `json:"message" name:"message"`
+	// Business error code. Returns Success when successful, and returns the reason for a specific business error when an error occurs
+	CodeDesc string `json:"codeDesc" name:"codeDesc"`
 }
 
-func (r *DescribeClusterInstancesResponse) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DescribeClusterInstancesResponse) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DescribeClusterInstancesResponse) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DescribeClusterInstancesResponse) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
-
+// Node defines the cluster node responses
 type Node struct {
-	InstanceId *string `json:"instanceId" name:"instanceId"`
-	ProjectId *int `json:"projectId" name:"projectId"`
-	InstanceName *string `json:"instanceName" name:"instanceName"`
-	InstanceType *string `json:"instanceType" name:"instanceType"`
-	KernelVersion *string `json:"kernelVersion" name:"kernelVersion"`
-	PodCidr *string `json:"podCidr" name:"podCidr"`
-	Cpu *int `json:"cpu" name:"cpu"`
-	Mem *int `json:"mem" name:"mem"`
-	Gpu *int `json:"gpu" name:"gpu"`
-	WanIp *string `json:"wanIp" name:"wanIp"`
-	LanIp *string `json:"lanIp" name:"lanIp"`
-	OsImage *string `json:"osImage" name:"osImage"`
-	IsNormal *int `json:"isNormal" name:"isNormal"`
-	CvmState *int `json:"cvmState" name:"cvmState"`
-	CvmPayMode *int `json:"cvmPayMode" name:"cvmPayMode"`
-	NetworkPayMode *int `json:"networkPayMode" name:"networkPayMode"`
-	CreatedAt *string `json:"createdAt" name:"createdAt"`
-	InstanceCreateTime *string `json:"instanceCreateTime" name:"instanceCreateTime"`
-	InstanceDeadlineTime *string `json:"instanceDeadlineTime" name:"instanceDeadlineTime"`
-	ZoneId *int `json:"zoneId" name:"zoneId"`
-	Zone *string `json:"zone" name:"zone"`
-	AbnormalReason *AbnormalReason `json:"abnormalReason" name:"abnormalReason"`
-	Labels *map[string] string `json:"labels" name:"labels"`
-	AutoScalingGroupId *string `json:"autoScalingGroupId" name:"autoScalingGroupId"`
-	Unschedulable *bool `json:"unschedulable" name:"unschedulable"`
-	DrainStatus *string `json:"drainStatus" name:"drainStatus"`
+	InstanceID           string            `json:"instanceId" name:"instanceId"`
+	ProjectID            int64             `json:"projectId" name:"projectId"`
+	InstanceName         string            `json:"instanceName" name:"instanceName"`
+	InstanceType         string            `json:"instanceType" name:"instanceType"`
+	KernelVersion        string            `json:"kernelVersion" name:"kernelVersion"`
+	PodCidr              string            `json:"podCidr" name:"podCidr"`
+	CPU                  int64             `json:"cpu" name:"cpu"`
+	Mem                  int64             `json:"mem" name:"mem"`
+	Gpu                  int64             `json:"gpu" name:"gpu"`
+	WanIP                string            `json:"wanIp" name:"wanIp"`
+	LanIP                string            `json:"lanIp" name:"lanIp"`
+	OsImage              string            `json:"osImage" name:"osImage"`
+	IsNormal             int64             `json:"isNormal" name:"isNormal"`
+	CvmState             int64             `json:"cvmState" name:"cvmState"`
+	CvmPayMode           int64             `json:"cvmPayMode" name:"cvmPayMode"`
+	NetworkPayMode       int64             `json:"networkPayMode" name:"networkPayMode"`
+	CreatedAt            string            `json:"createdAt" name:"createdAt"`
+	InstanceCreateTime   string            `json:"instanceCreateTime" name:"instanceCreateTime"`
+	InstanceDeadlineTime string            `json:"instanceDeadlineTime" name:"instanceDeadlineTime"`
+	ZoneID               int64             `json:"zoneId" name:"zoneId"`
+	Zone                 string            `json:"zone" name:"zone"`
+	AbnormalReason       AbnormalReason    `json:"abnormalReason" name:"abnormalReason"`
+	Labels               map[string]string `json:"labels" name:"labels"`
+	AutoScalingGroupID   string            `json:"autoScalingGroupId" name:"autoScalingGroupId"`
+	Unschedulable        bool              `json:"unschedulable" name:"unschedulable"`
+	DrainStatus          string            `json:"drainStatus" name:"drainStatus"`
 }
 
+// AbnormalReason defines the abnormal reason response
 type AbnormalReason struct {
-	MemoryPressure *string `json:"MemoryPressure" name:"MemoryPressure"`
-	OutOfDisk *string `json:"OutOfDisk" name:"OutOfDisk"`
-	NetworkUnavailable *string `json:"NetworkUnavailable" name:"NetworkUnavailable"`
-	Unknown *string `json:"Unknown" name:"Unknown"`
+	MemoryPressure     string `json:"MemoryPressure" name:"MemoryPressure"`
+	OutOfDisk          string `json:"OutOfDisk" name:"OutOfDisk"`
+	NetworkUnavailable string `json:"NetworkUnavailable" name:"NetworkUnavailable"`
+	Unknown            string `json:"Unknown" name:"Unknown"`
 }
 
+// DeleteClusterRequest defines the delete cluster request
 type DeleteClusterRequest struct {
 	*tchttp.BaseRequest
-	ClusterId *string `json:"clusterId" name:"clusterId"`
-	// 集群节点删除方式，主要针对按量计费主机，包年包月主机只能做移除操作
-	// RemoveOnly（仅移除）
-	// Return（退还）
-	// 默认为按量计费机器销毁，包年包月机器移除
-	NodeDeleteMode *string `json:"nodeDeleteMode" name:"nodeDeleteMode"`
+	ClusterID string `json:"clusterId" name:"clusterId"`
+	// Cluster node deletion mode, mainly for volume-based billing hosts, the package annual subscription host can only do the removal operation
+	// RemoveOnly (removal only)
+	// Return (return)
+	NodeDeleteMode string `json:"nodeDeleteMode" name:"nodeDeleteMode"`
 }
 
-func (r *DeleteClusterRequest) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DeleteClusterRequest) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DeleteClusterRequest) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DeleteClusterRequest) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// DeleteClusterResponse defines the delete cluster response
 type DeleteClusterResponse struct {
 	*tchttp.BaseResponse
-	// 集群参数
+	// Cluster data
 	Data struct {
-		// 唯一请求ID，每次请求都会返回。定位问题时需要提供该次请求的RequestId。
-		RequestId *int `json:"requestId" name:"requestId"`
+		// Task ID
+		RequestID int64 `json:"requestId" name:"requestId"`
 	} `json:"data"`
-	// 公共错误码。0 表示成功，其他值表示失败
-	Code *int `json:"code" name:"code"`
-	// 模块错误信息描述，与接口相关
-	Message *string `json:"message" name:"message"`
-	// 业务侧错误码。成功时返回 Success，错误时返回具体业务错误原因
-	CodeDesc *string `json:"codeDesc" name:"codeDesc"`
+	// Public error code. 0 means success, other values ​​indicate failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
+	Message string `json:"message" name:"message"`
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
+	CodeDesc string `json:"codeDesc" name:"codeDesc"`
 }
 
-func (r *DeleteClusterResponse) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DeleteClusterResponse) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DeleteClusterResponse) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DeleteClusterResponse) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
-
+// DescribeClusterRequest defines the delete cluster request
 type DescribeClusterRequest struct {
 	*tchttp.BaseRequest
-	ClusterIds []string `json:"clusterIds" name:"clusterIds"`
-	ClusterName string `json:"clusterName" name:"clusterName"`
-	Status string `json:"status" name:"status"`
-	OrderField string `json:"orderField" name:"orderField"`
-	OrderType string `json:"orderType" name:"orderType"`
-	Offset int `json:"offset" name:"offset"`
-	Limit int `json:"limit" name:"limit"`
+	ClusterIds  []string `json:"clusterIds" name:"clusterIds"`
+	ClusterName string   `json:"clusterName" name:"clusterName"`
+	Status      string   `json:"status" name:"status"`
+	OrderField  string   `json:"orderField" name:"orderField"`
+	OrderType   string   `json:"orderType" name:"orderType"`
+	Offset      int64    `json:"offset" name:"offset"`
+	Limit       int64    `json:"limit" name:"limit"`
 }
 
-func (r *DescribeClusterRequest) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DescribeClusterRequest) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DescribeClusterRequest) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DescribeClusterRequest) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// DescribeClusterResponse defines the describe cluster response
 type DescribeClusterResponse struct {
 	*tchttp.BaseResponse
-	// 集群参数
+	// Cluster data
 	Data struct {
+		// Total number of cluster nodes
 		TotalCount int64 `json:"totalCount" name:"totalCount"`
+		// Cluster list, details are as follows
 		Clusters []Cluster `json:"clusters" name:"clusters"`
 	} `json:"data"`
-	// 公共错误码。0 表示成功，其他值表示失败
-	Code int `json:"code" name:"code"`
-	// 模块错误信息描述，与接口相关
+	// Public error code. 0 means success, other values ​​indicate failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
-	// 业务侧错误码。成功时返回 Success，错误时返回具体业务错误原因
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
 	CodeDesc string `json:"codeDesc" name:"codeDesc"`
 }
 
-func (r *DescribeClusterResponse) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DescribeClusterResponse) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DescribeClusterResponse) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DescribeClusterResponse) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// Cluster defines the cluster response
 type Cluster struct {
-	ClusterId string `json:"clusterId" name:"clusterId"`
-	ClusterName string `json:"clusterName" name:"clusterName"`
-	Description string `json:"description" name:"description"`
-	ClusterCIDR string `json:"clusterCIDR" name:"clusterCIDR"`
-	UnVpcId string `json:"unVpcId" name:"unVpcId"`
-	VpcId int64 `json:"vpcId" name:"vpcId"`
-	Status string `json:"status" name:"status"`
-	NodeNum int64 `json:"nodeNum" name:"nodeNum"`
-	NodeStatus string `json:"nodeStatus" name:"nodeStatus"`
-	TotalCpu int64 `json:"totalCpu" name:"totalCpu"`
-	TotalMem int64 `json:"totalMem" name:"totalMem"`
-	OS string `json:"os" name:"os"`
-	CreatedAt int64 `json:"createdAt" name:"createdAt"`
-	UpdatedAt int64 `json:"updatedAt" name:"updatedAt"`
-	RegionId string `json:"regionId" name:"regionId"`
-	Region string `json:"region" name:"region"`
-	K8sVersion string `json:"k8sVersion" name:"k8sVersion"`
+	ClusterID               string `json:"clusterId" name:"clusterId"`
+	ClusterName             string `json:"clusterName" name:"clusterName"`
+	Description             string `json:"description" name:"description"`
+	ClusterCIDR             string `json:"clusterCIDR" name:"clusterCIDR"`
+	UnVpcID                 string `json:"unVpcId" name:"unVpcId"`
+	VpcID                   int64  `json:"vpcId" name:"vpcId"`
+	Status                  string `json:"status" name:"status"`
+	NodeNum                 int64  `json:"nodeNum" name:"nodeNum"`
+	NodeStatus              string `json:"nodeStatus" name:"nodeStatus"`
+	TotalCPU                int64  `json:"totalCpu" name:"totalCpu"`
+	TotalMem                int64  `json:"totalMem" name:"totalMem"`
+	OS                      string `json:"os" name:"os"`
+	CreatedAt               int64  `json:"createdAt" name:"createdAt"`
+	UpdatedAt               int64  `json:"updatedAt" name:"updatedAt"`
+	RegionID                string `json:"regionId" name:"regionId"`
+	Region                  string `json:"region" name:"region"`
+	K8sVersion              string `json:"k8sVersion" name:"k8sVersion"`
 	ClusterExternalEndpoint string `json:"clusterExternalEndpoint" name:"clusterExternalEndpoint"`
-	ProjectId int64 `json:"projectId" name:"projectId"`
+	ProjectID               int64  `json:"projectId" name:"projectId"`
 }
 
+// DescribeClusterSecurityInfoRequest defines the describeClusterSecurityInfo request
 type DescribeClusterSecurityInfoRequest struct {
 	*tchttp.BaseRequest
-	ClusterId *string `json:"clusterId" name:"clusterId"`
+	ClusterID string `json:"clusterId" name:"clusterId"`
 }
 
-func (r *DescribeClusterSecurityInfoRequest) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DescribeClusterSecurityInfoRequest) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DescribeClusterSecurityInfoRequest) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DescribeClusterSecurityInfoRequest) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// DescribeClusterSecurityInfoResponse defines the describeClusterSecurityInfo response
 type DescribeClusterSecurityInfoResponse struct {
 	*tchttp.BaseResponse
-	// 集群参数
+	// Cluster data
 	Data struct {
-		UserName string `json:"userName" name:"userName"`
-		Password string `json:"password" name:"password"`
-		CertificationAuthority string `json:"certificationAuthority" name:"certificationAuthority"`
+		UserName                string `json:"userName" name:"userName"`
+		Password                string `json:"password" name:"password"`
+		CertificationAuthority  string `json:"certificationAuthority" name:"certificationAuthority"`
 		ClusterExternalEndpoint string `json:"clusterExternalEndpoint" name:"clusterExternalEndpoint"`
-		PgwEndpoint string `json:"pgwEndpoint" name:"pgwEndpoint"`
-		Domain string `json:"domain" name:"domain"`
+		PgwEndpoint             string `json:"pgwEndpoint" name:"pgwEndpoint"`
+		Domain                  string `json:"domain" name:"domain"`
 	} `json:"data"`
-	// 公共错误码。0 表示成功，其他值表示失败
-	Code int `json:"code" name:"code"`
-	// 模块错误信息描述，与接口相关
+	// Public error code. 0 means success, other values ​​indicate failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
-	// 业务侧错误码。成功时返回 Success，错误时返回具体业务错误原因
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
 	CodeDesc string `json:"codeDesc" name:"codeDesc"`
 }
 
-func (r *DescribeClusterSecurityInfoResponse) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *DescribeClusterSecurityInfoResponse) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *DescribeClusterSecurityInfoResponse) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *DescribeClusterSecurityInfoResponse) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// OperateClusterVipRequest defines the clusterVip request
 type OperateClusterVipRequest struct {
 	*tchttp.BaseRequest
-	ClusterId string `json:"clusterId" name:"clusterId"`
+	ClusterID string `json:"clusterId" name:"clusterId"`
 	Operation string `json:"operation" name:"operation"`
 }
 
-func (r *OperateClusterVipRequest) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *OperateClusterVipRequest) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *OperateClusterVipRequest) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *OperateClusterVipRequest) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
+// OperateClusterVipResponse defines the clusterVip response
 type OperateClusterVipResponse struct {
 	*tchttp.BaseResponse
-	// 集群参数
+	// Cluster data
 	Data struct {
-		RequestId string `json:"requestId" name:"requestId"`
+		RequestID string `json:"requestId" name:"requestId"`
 	} `json:"data"`
-	// 公共错误码。0 表示成功，其他值表示失败
-	Code int `json:"code" name:"code"`
-	// 模块错误信息描述，与接口相关
+	// Public error code. 0 means success, other values ​​indicate failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
-	// 业务侧错误码。成功时返回 Success，错误时返回具体业务错误原因
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
 	CodeDesc string `json:"codeDesc" name:"codeDesc"`
 }
 
-func (r *OperateClusterVipResponse) ToJsonString() string {
+// ToJSONString defines request to json format
+func (r *OperateClusterVipResponse) ToJSONString() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
 
-func (r *OperateClusterVipResponse) FromJsonString(s string) error {
+// FromJSONString defines request from json format
+func (r *OperateClusterVipResponse) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
