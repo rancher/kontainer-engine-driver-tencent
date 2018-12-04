@@ -18,7 +18,7 @@ fi
 
 cp ../bin/kontainer-engine-driver-tencent .
 
-IMAGE=${REPO}/rancher-tke-driver:${TAG}
+IMAGE=${REPO}/kontainer-engine-driver-tencent:${TAG}
 docker build -t ${IMAGE} .
 echo ${IMAGE} > ../dist/images
 echo Built ${IMAGE}
