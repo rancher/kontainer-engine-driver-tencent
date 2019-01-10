@@ -94,7 +94,7 @@ func (r *CreateClusterRequest) FromJSONString(s string) error {
 // CreateClusterResponse defines create cluster response
 type CreateClusterResponse struct {
 	*tchttp.BaseResponse
-	// Public error code. 0 means success, other values ​​indicate failure
+	// Public error code. 0 means success, other values indicates failure
 	Code int64 `json:"code" name:"code"`
 	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
@@ -157,7 +157,7 @@ type DescribeClusterInstancesResponse struct {
 		// Node list, details are as follows
 		Nodes []Node `json:"nodes" name:"nodes"`
 	} `json:"data"`
-	// Public error code. 0 means success, other values ​​indicate failure
+	// Public error code. 0 means success, other values indicates failure
 	Code int64 `json:"code" name:"code"`
 	// Module error message description, related to interface
 	Message string `json:"message" name:"message"`
@@ -243,7 +243,7 @@ type DeleteClusterResponse struct {
 		// Task ID
 		RequestID int64 `json:"requestId" name:"requestId"`
 	} `json:"data"`
-	// Public error code. 0 means success, other values ​​indicate failure
+	// Public error code. 0 means success, other values indicates failure
 	Code int64 `json:"code" name:"code"`
 	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
@@ -296,7 +296,7 @@ type DescribeClusterResponse struct {
 		// Cluster list, details are as follows
 		Clusters []Cluster `json:"clusters" name:"clusters"`
 	} `json:"data"`
-	// Public error code. 0 means success, other values ​​indicate failure
+	// Public error code. 0 means success, other values indicates failure
 	Code int64 `json:"code" name:"code"`
 	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
@@ -368,7 +368,7 @@ type DescribeClusterSecurityInfoResponse struct {
 		PgwEndpoint             string `json:"pgwEndpoint" name:"pgwEndpoint"`
 		Domain                  string `json:"domain" name:"domain"`
 	} `json:"data"`
-	// Public error code. 0 means success, other values ​​indicate failure
+	// Public error code. 0 means success, other values indicates failure
 	Code int64 `json:"code" name:"code"`
 	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
@@ -413,7 +413,7 @@ type OperateClusterVipResponse struct {
 	Data struct {
 		RequestID string `json:"requestId" name:"requestId"`
 	} `json:"data"`
-	// Public error code. 0 means success, other values ​​indicate failure
+	// Public error code. 0 means success, other values indicates failure
 	Code int64 `json:"code" name:"code"`
 	// Module error message description, related to the interface
 	Message string `json:"message" name:"message"`
@@ -430,5 +430,189 @@ func (r *OperateClusterVipResponse) ToJSONString() string {
 
 // FromJSONString defines request from json format
 func (r *OperateClusterVipResponse) FromJSONString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+// defines the addClusterInstances request
+type AddClusterInstancesRequest struct {
+	*tchttp.BaseRequest
+	// The name of the cluster
+	ClusterID         string `json:"clusterId" name:"clusterId"`
+	ExpandInstanceNum int64  `json:"expandInstanceNum" name:"expandInstanceNum"`
+
+	// The description of the cluster
+	ClusterDesc string `json:"clusterDesc" name:"clusterDesc"`
+	// The zone id of the cluster
+	ZoneID string `json:"zoneId" name:"zoneId"`
+	// The number of nodes purchased, up to 100
+	GoodsNum int64 `json:"goodsNum" name:"goodsNum"`
+	// CPU core number
+	CPU int64 `json:"cpu" name:"cpu"`
+	// Memory size (GB)
+	Mem int64 `json:"mem" name:"mem"`
+	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
+	// the extension node will also automatically use this system (*required)
+	OsName string `json:"osName" name:"osName"`
+	// System name, Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64, all nodes in the cluster use this system,
+	// the extension node will also automatically use this system (*required)
+	InstanceType string `json:"instanceType" name:"instanceType"`
+	// See CVM Instance Configuration for details . Default: S1.SMALL1
+	CvmType string `json:"cvmType" name:"cvmType"`
+	// The annual renewal fee for the annual subscription, default to NOTIFY_AND_AUTO_RENEW
+	RenewFlag string `json:"renewFlag" name:"renewFlag"`
+	// Type of bandwidth
+	// PayByMonth vm: PayByMonth, PayByTraffic,
+	// PayByHour vm: PayByHour, PayByTraffic
+	BandwidthType string `json:"bandwidthType" name:"bandwidthType"`
+	// Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak
+	Bandwidth int64 `json:"bandwidth" name:"bandwidth"`
+	// Whether to open the public network IP, 0: not open 1: open
+	WanIP int64 `json:"wanIp" name:"wanIp"`
+	// Subnet ID
+	SubnetID string `json:"subnetId" name:"subnetId"`
+	// Whether it is a public network gateway
+	// 0: non-public network gateway
+	// 1: public network gateway
+	IsVpcGateway int64 `json:"isVpcGateway" name:"isVpcGateway"`
+	// system disk size. linux system adjustment range is 20 - 50g, step size is 1
+	RootSize int64 `json:"rootSize" name:"rootSize"`
+	// System disk type. System disk type restrictions are detailed in the CVM instance configuration.
+	// default value of the SSD cloud drive : CLOUD_BASIC.
+	RootType string `json:"rootType" name:"rootType"`
+	// Data disk size (GB)
+	StorageSize int64 `json:"storageSize" name:"storageSize"`
+	// Data disk type
+	StorageType string `json:"storageType" name:"storageType"`
+	// Node password
+	Password string `json:"password" name:"password"`
+	// Key id
+	KeyID string `json:"keyId" name:"keyId"`
+	// The annual subscription period of the annual subscription month, unit month. This parameter is required when cvmType is PayByMonth
+	Period int64 `json:"period" name:"period"`
+	// Security group ID, default does not bind any security groups, please fill out the inquiry list of security groups sgId field interface returned
+	SgID string `json:"sgId" name:"sgId"`
+	// Base64-encoded user script, which is executed after the k8s component is run. The user is required to guarantee the reentrant and retry logic of the script.
+	UserScript string `json:"userScript" name:"userScript"`
+}
+
+// ToJSONString defines request to json format
+func (r *AddClusterInstancesRequest) ToJSONString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+// FromJSONString defines request from json format
+func (r *AddClusterInstancesRequest) FromJSONString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+// defines the add cluster instances response
+type AddClusterInstancesResponse struct {
+	*tchttp.BaseResponse
+	// Cluster data
+	Data struct {
+		RequestID   string   `json:"requestId" name:"requestId"`
+		InstanceIDs []string `json:"instanceIds" name:"instanceIds"`
+	} `json:"data"`
+	// Public error code. 0 means success, other values indicates failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
+	Message string `json:"message" name:"message"`
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
+	CodeDesc string `json:"codeDesc" name:"codeDesc"`
+}
+
+// ToJSONString defines response to json format
+func (r *AddClusterInstancesResponse) ToJSONString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+// FromJSONString defines response from json format
+func (r *AddClusterInstancesResponse) FromJSONString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+// ModifyClusterAttributesRequest defines the modify cluster attributes request
+type ModifyClusterAttributesRequest struct {
+	*tchttp.BaseRequest
+	ClusterID   string `json:"clusterId" name:"clusterId"`
+	ClusterName string `json:"clusterName" name:"clusterName"`
+	ClusterDesc string `json:"clusterDesc" name:"clusterDesc"`
+}
+
+// ToJSONString defines request to json format
+func (r *ModifyClusterAttributesRequest) ToJSONString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+// FromJSONString defines request from json format
+func (r *ModifyClusterAttributesRequest) FromJSONString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+// ModifyClusterAttributesResponse defines the response
+type ModifyClusterAttributesResponse struct {
+	*tchttp.BaseResponse
+	// Public error code. 0 means success, other values indicates failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
+	Message string `json:"message" name:"message"`
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
+	CodeDesc string `json:"codeDesc" name:"codeDesc"`
+}
+
+// ToJSONString defines request to json format
+func (r *ModifyClusterAttributesResponse) ToJSONString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+// FromJSONString defines request from json format
+func (r *ModifyClusterAttributesResponse) FromJSONString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+// ModifyProjectIdRequest defines the modify project ID request
+type ModifyProjectIdRequest struct {
+	*tchttp.BaseRequest
+	ClusterID string `json:"clusterId" name:"clusterId"`
+	ProjectID int64  `json:"projectId" name:"projectId"`
+}
+
+// ToJSONString defines request to json format
+func (r *ModifyProjectIdRequest) ToJSONString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+// FromJSONString defines request from json format
+func (r *ModifyProjectIdRequest) FromJSONString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+// ModifyProjectIdResponse defines the response
+type ModifyProjectIdResponse struct {
+	*tchttp.BaseResponse
+	// Public error code. 0 means success, other values indicates failure
+	Code int64 `json:"code" name:"code"`
+	// Module error message description, related to the interface
+	Message string `json:"message" name:"message"`
+	// Service side error code. Returns Success when successful,
+	// and returns the reason for a specific business error when an error occurs
+	CodeDesc string `json:"codeDesc" name:"codeDesc"`
+}
+
+// ToJSONString defines request to json format
+func (r *ModifyProjectIdResponse) ToJSONString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+// FromJSONString defines request from json format
+func (r *ModifyProjectIdResponse) FromJSONString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }

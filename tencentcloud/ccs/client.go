@@ -187,3 +187,84 @@ func (c *Client) OperateClusterVip(request *OperateClusterVipRequest) (response 
 	err = c.Send(request, response)
 	return
 }
+
+// NewAddClusterInstancesRequest defines driver cluster add instances request
+func NewAddClusterInstancesRequest() (request *AddClusterInstancesRequest) {
+	request = &AddClusterInstancesRequest{
+		BaseRequest: &tchttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo("cis", apiVersion, "AddClusterInstances")
+	return
+}
+
+// NewAddClusterInstancesResponse defines driver cluster add instances response
+func NewAddClusterInstancesResponse() (response *AddClusterInstancesResponse) {
+	response = &AddClusterInstancesResponse{
+		BaseResponse: &tchttp.BaseResponse{},
+	}
+	return
+}
+
+// AddClusterInstances adds new cluster instances to the cluster
+func (c *Client) AddClusterInstances(request *AddClusterInstancesRequest) (response *AddClusterInstancesResponse, err error) {
+	if request == nil {
+		request = NewAddClusterInstancesRequest()
+	}
+	response = NewAddClusterInstancesResponse()
+	err = c.Send(request, response)
+	return
+}
+
+// NewModifyClusterAttributesRequest defines driver modify cluster attributes request
+func NewModifyClusterAttributesRequest() (request *ModifyClusterAttributesRequest) {
+	request = &ModifyClusterAttributesRequest{
+		BaseRequest: &tchttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo("cis", apiVersion, "ModifyClusterAttributes")
+	return
+}
+
+// NewModifyClusterAttributesResponse defines driver modify cluster attributes response
+func NewModifyClusterAttributesResponse() (response *ModifyClusterAttributesResponse) {
+	response = &ModifyClusterAttributesResponse{
+		BaseResponse: &tchttp.BaseResponse{},
+	}
+	return
+}
+
+// ModifyClusterAttributes update cluster attributes
+func (c *Client) ModifyClusterAttributes(request *ModifyClusterAttributesRequest) (response *ModifyClusterAttributesResponse, err error) {
+	if request == nil {
+		request = NewModifyClusterAttributesRequest()
+	}
+	response = NewModifyClusterAttributesResponse()
+	err = c.Send(request, response)
+	return
+}
+
+// NewModifyProjectIdRequest defines driver modify cluster attributes request
+func NewModifyProjectIdRequest() (request *ModifyProjectIdRequest) {
+	request = &ModifyProjectIdRequest{
+		BaseRequest: &tchttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo("cis", apiVersion, "ModifyProjectId")
+	return
+}
+
+// NewModifyProjectIdResponse defines driver modify cluster attributes response
+func NewModifyProjectIdResponse() (response *ModifyProjectIdResponse) {
+	response = &ModifyProjectIdResponse{
+		BaseResponse: &tchttp.BaseResponse{},
+	}
+	return
+}
+
+// ModifyProjectId update cluster attributes
+func (c *Client) ModifyProjectId(request *ModifyProjectIdRequest) (response *ModifyProjectIdResponse, err error) {
+	if request == nil {
+		request = NewModifyProjectIdRequest()
+	}
+	response = NewModifyProjectIdResponse()
+	err = c.Send(request, response)
+	return
+}

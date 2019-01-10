@@ -159,7 +159,6 @@ func NewDriver() types.Driver {
 	driver.driverCapabilities.AddCapability(types.SetVersionCapability)
 	driver.driverCapabilities.AddCapability(types.GetClusterSizeCapability)
 	driver.driverCapabilities.AddCapability(types.SetClusterSizeCapability)
-
 	return driver
 }
 
@@ -317,36 +316,55 @@ func (d *Driver) GetDriverUpdateOptions(ctx context.Context) (*types.DriverFlags
 	driverFlag := types.DriverFlags{
 		Options: make(map[string]*types.Flag),
 	}
-	driverFlag.Options["cluster-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The ID of the existing cluster",
-	}
 	driverFlag.Options["cluster-name"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The name of the cluster that should be displayed to the user",
-	}
-	driverFlag.Options["vpc-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The private vpc id the cluster",
 	}
 	driverFlag.Options["cluster-desc"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The description of the cluster",
 	}
-	driverFlag.Options["secret-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The secretID of the cluster",
+	driverFlag.Options["project-id"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The ID of your project to use when creating a cluster",
 	}
-	driverFlag.Options["secret-key"] = &types.Flag{
-		Type:     types.StringType,
-		Password: true,
-		Usage:    "The secretKey of the cluster",
+	driverFlag.Options["goods-num"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The number of nodes purchased, up to 100",
+	}
+	driverFlag.Options["instance-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "See CVM Instance Configuration for details . Default: S1.SMALL1",
+	}
+	driverFlag.Options["bandwidth-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Type of bandwidth",
+	}
+	driverFlag.Options["bandwidth"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak",
+	}
+	driverFlag.Options["wan-ip"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "the cluster master occupies the IP of a VPC subnet",
+	}
+	driverFlag.Options["is-vpc-gateway"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Whether it is a public network gateway, network gateway only in public with a public IP, and in order to work properly when under private network",
+	}
+	driverFlag.Options["storage-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Data disk size (GB), the step size is 10",
+	}
+	driverFlag.Options["root-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "System disk size. Linux system adjustment range is 20 - 50G, step size is 1",
 	}
 	return &driverFlag, nil
 }
 
 // getStateFromOpts gets input values from opts
-func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
+func getStateFromOpts(driverOptions *types.DriverOptions, isCreate bool) (*state, error) {
 	d := &state{
 		ClusterInfo: types.ClusterInfo{
 			Metadata: map[string]string{},
@@ -394,21 +412,38 @@ func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
 	d.MasterSubnetID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "master-subnet-id", "masterSubnetId").(string)
 	d.UserScript = options.GetValueFromDriverOptions(driverOptions, types.StringType, "user-script", "userScript").(string)
 
-	return d, d.validate()
+	return d, d.validate(isCreate)
 }
 
-func (s *state) validate() error {
-	if s.ClusterName == "" {
-		return fmt.Errorf("clusterName is required")
-	} else if s.ClusterCIDR == "" {
-		return fmt.Errorf("clusterCidr is required")
-	} else if s.SecretID == "" {
+func (s *state) validate(isCreate bool) error {
+	if isCreate {
+		if s.ClusterName == "" {
+			return fmt.Errorf("cluster name is required")
+		} else if s.ClusterCIDR == "" {
+			return fmt.Errorf("cluster cidr is required")
+		} else if s.ClusterVersion == "" {
+			return fmt.Errorf("cluster version is required")
+		} else if s.Region == "" {
+			return fmt.Errorf("cluster region is required")
+		} else if s.SubnetID == "" {
+			return fmt.Errorf("cluster subnetID is required")
+		} else if s.ZoneID == "" {
+			return fmt.Errorf("cluster zoneID is required")
+		} else if s.VpcID == "" {
+			return fmt.Errorf("cluster vpcID is required")
+		}
+	}
+
+	if s.SecretID == "" {
 		return fmt.Errorf("secretID is required")
 	} else if s.SecretKey == "" {
 		return fmt.Errorf("secretKey is required")
-	} else if s.Region == "" {
-		return fmt.Errorf("region is required")
+	} else if s.RootSize == 0 {
+		return fmt.Errorf("rootSize should not be set to 0")
+	} else if s.StorageSize == 0 {
+		return fmt.Errorf("storageSize should not be set to 0")
 	}
+
 	return nil
 }
 
@@ -430,7 +465,7 @@ func (d *Driver) getTKEServiceClient(ctx context.Context, state *state, method s
 
 // Create implements driver create interface
 func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types.ClusterInfo) (*types.ClusterInfo, error) {
-	state, err := getStateFromOpts(opts)
+	state, err := getStateFromOpts(opts, true)
 	if err != nil {
 		return nil, err
 	}
@@ -454,8 +489,7 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 
 	if err == nil {
 		state.ClusterID = resp.Data.ClusterID
-		fmt.Printf("resp data str: %s\n", state.ClusterID)
-		logrus.Debugf("Cluster %s create is called for region %s and zone %s. Status Code %v", state.ClusterID, state.Region, state.ZoneID, resp.Code)
+		logrus.Debugf("Cluster %s with id %s create is called for region %s and zone %s. Status Code %v", state.ClusterName, state.ClusterID, state.Region, state.ZoneID, resp.Code)
 	}
 
 	if err := d.waitTKECluster(ctx, svc, state); err != nil {
@@ -512,7 +546,6 @@ func getCluster(svc *ccs.Client, state *state) (*ccs.DescribeClusterResponse, er
 
 	resp, err := svc.DescribeCluster(req)
 	if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
-		fmt.Printf("An API error has returned: %s\n", err)
 		return resp, err
 	}
 
@@ -560,8 +593,87 @@ func getState(info *types.ClusterInfo) (*state, error) {
 
 // Update implements driver update interface
 func (d *Driver) Update(ctx context.Context, info *types.ClusterInfo, opts *types.DriverOptions) (*types.ClusterInfo, error) {
-	logrus.Info("unimplemented")
-	return nil, fmt.Errorf("not implemented")
+	logrus.Info("Invoking update cluster")
+	state, err := getState(info)
+	if err != nil {
+		return nil, err
+	}
+
+	newState, err := getStateFromOpts(opts, false)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeCount := state.GoodsNum + newState.GoodsNum
+	logrus.Debugf("Updating config. ClusterName: %s, ClusterVersion: %s, NodeCount: %v", state.ClusterName, state.ClusterVersion, nodeCount)
+
+	// init tke service client
+	svc, err := d.getTKEServiceClient(ctx, state, "POST")
+	if err != nil {
+		return nil, err
+	}
+
+	if newState.GoodsNum != 0 {
+		log.Infof(ctx, "Updating node number to %v", nodeCount)
+		req, err := d.getWrapAddClusterInstancesRequest(state, newState)
+		if err != nil {
+			return nil, err
+		}
+
+		// init the TKE client
+		resp, err := svc.AddClusterInstances(req)
+		if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+			return nil, err
+		}
+		if err == nil {
+			logrus.Infof("Add cluster instances is called for cluster %s. Status Code %v, Response Instance IDs: %s", state.ClusterID, resp.Code, resp.Data.InstanceIDs)
+		}
+		if err := d.waitTKECluster(ctx, svc, state); err != nil {
+			return nil, err
+		}
+		state.GoodsNum = nodeCount
+	}
+
+	if newState.ClusterName != "" || newState.ClusterDesc != "" {
+		log.Infof(ctx, "Updating cluster %s attributes to name: %s, desc: %s", state.ClusterName, newState.ClusterName, newState.ClusterDesc)
+		req, err := d.getWrapModifyClusterAttributesRequest(state, newState)
+		if err != nil {
+			return nil, err
+		}
+
+		// init the TKE client
+		resp, err := svc.ModifyClusterAttributes(req)
+		if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+			return nil, err
+		}
+		if err == nil {
+			logrus.Infof("Modify cluster attributes is called for cluster %s. Status Code %v", state.ClusterID, resp.Code)
+		}
+		if err := d.waitTKECluster(ctx, svc, state); err != nil {
+			return nil, err
+		}
+	}
+
+	if state.ProjectID != newState.ProjectID {
+		log.Infof(ctx, "Updating project id to %d for cluster %s", newState.ProjectID, state.ClusterName)
+		req, err := d.getWrapModifyProjectIDRequest(state, newState)
+		if err != nil {
+			return nil, err
+		}
+
+		// init the TKE client
+		resp, err := svc.ModifyProjectId(req)
+		if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+			return nil, err
+		}
+		if err == nil {
+			logrus.Infof("Modify cluster projectId is called for cluster %s. Status Code %v", state.ClusterID, resp.Code)
+		}
+		if err := d.waitTKECluster(ctx, svc, state); err != nil {
+			return nil, err
+		}
+	}
+	return info, storeState(info, state)
 }
 
 func getClusterCerts(svc *ccs.Client, state *state) (*ccs.DescribeClusterSecurityInfoResponse, error) {
@@ -579,7 +691,6 @@ func getClusterCerts(svc *ccs.Client, state *state) (*ccs.DescribeClusterSecurit
 
 	resp, err := svc.DescribeClusterSecurityInfo(request)
 	if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
-		fmt.Printf("An API error has returned: %s\n", err)
 		return resp, err
 	}
 	return resp, nil
@@ -702,7 +813,7 @@ func (d *Driver) Remove(ctx context.Context, info *types.ClusterInfo) error {
 }
 
 func (d *Driver) getWrapRemoveClusterRequest(state *state) (*ccs.DeleteClusterRequest, error) {
-	logrus.Info("invoking removeCluster")
+	logrus.Info("invoking get request of removeCluster")
 	request := ccs.NewDeleteClusterRequest()
 	content, err := json.Marshal(state)
 	if err != nil {
@@ -757,7 +868,6 @@ func (d *Driver) GetVersion(ctx context.Context, info *types.ClusterInfo) (*type
 // operateClusterVip creates or remove the cluster vip
 func (d *Driver) operateClusterVip(ctx context.Context, svc *ccs.Client, clusterID, operation string) error {
 	logrus.Infof("invoking operateClusterVip")
-
 	req := ccs.NewOperateClusterVipRequest()
 	req.ClusterID = clusterID
 	req.Operation = operation
@@ -770,7 +880,6 @@ func (d *Driver) operateClusterVip(ctx context.Context, svc *ccs.Client, cluster
 			if !strings.Contains(err.Error(), processRunningStatus) {
 				return err
 			}
-			fmt.Printf("An API error has returned: %s\n", err)
 		}
 
 		if resp.CodeDesc == successStatus && count >= 1 {
@@ -792,4 +901,101 @@ func (d *Driver) SetClusterSize(ctx context.Context, info *types.ClusterInfo, co
 func (d *Driver) SetVersion(ctx context.Context, info *types.ClusterInfo, version *types.KubernetesVersion) error {
 	logrus.Info("unimplemented")
 	return nil
+}
+
+func (d *Driver) getWrapAddClusterInstancesRequest(state, newState *state) (*ccs.AddClusterInstancesRequest, error) {
+	logrus.Info("invoking get wrap request of AddClusterInstances")
+	if newState.GoodsNum != 0 {
+		// goodsNum is the new nodes count that will be added to the cluster
+		state.GoodsNum = newState.GoodsNum
+	}
+	if newState.InstanceType != "" {
+		state.InstanceType = newState.InstanceType
+	}
+	if newState.BandwidthType != "" {
+		state.BandwidthType = newState.BandwidthType
+	}
+	if newState.Bandwidth != 0 {
+		state.Bandwidth = newState.Bandwidth
+	}
+	if newState.WanIP != 0 {
+		state.WanIP = newState.WanIP
+	}
+	if newState.IsVpcGateway != 0 {
+		state.IsVpcGateway = newState.IsVpcGateway
+	}
+	if newState.StorageSize != 0 {
+		state.StorageSize = newState.StorageSize
+	}
+	if newState.RootSize != 0 {
+		state.RootSize = newState.RootSize
+	}
+	if newState.SecretID != "" {
+		state.SecretID = newState.SecretID
+	}
+	if newState.SecretKey != "" {
+		state.SecretKey = newState.SecretKey
+	}
+	content, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+
+	request := ccs.NewAddClusterInstancesRequest()
+	err = request.FromJSONString(string(content))
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+func (d *Driver) getWrapModifyClusterAttributesRequest(state, newState *state) (*ccs.ModifyClusterAttributesRequest, error) {
+	logrus.Info("invoking get wrap request of ModifyClusterAttributes")
+	if newState.ClusterName != "" {
+		state.ClusterName = newState.ClusterName
+	}
+	if newState.ClusterDesc != "" {
+		state.ClusterDesc = newState.ClusterDesc
+	}
+	if newState.SecretID != "" {
+		state.SecretID = newState.SecretID
+	}
+	if newState.SecretKey != "" {
+		state.SecretKey = newState.SecretKey
+	}
+	content, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+
+	request := ccs.NewModifyClusterAttributesRequest()
+	err = request.FromJSONString(string(content))
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+func (d *Driver) getWrapModifyProjectIDRequest(state, newState *state) (*ccs.ModifyProjectIdRequest, error) {
+	logrus.Info("invoking get wrap request of ModifyProjectId")
+	if state.ProjectID != newState.ProjectID {
+		state.ProjectID = newState.ProjectID
+	}
+	if newState.SecretID != "" {
+		state.SecretID = newState.SecretID
+	}
+	if newState.SecretKey != "" {
+		state.SecretKey = newState.SecretKey
+	}
+	content, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+
+	request := ccs.NewModifyProjectIdRequest()
+	err = request.FromJSONString(string(content))
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
 }
