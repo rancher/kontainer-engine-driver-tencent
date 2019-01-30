@@ -42,8 +42,7 @@ func (c *Client) Send(request tchttp.Request, response tchttp.Response) (err err
 	if request.GetHttpMethod() == "POST" {
 		httpRequest.Header["Content-Type"] = []string{"application/x-www-form-urlencoded"}
 	}
-	log.Printf("[DEBUG] http request url =%v", httpRequest)
-	log.Printf("[DEBUG] http request header=%v", request.GetBodyReader())
+	//log.Printf("[DEBUG] http request=%v", httpRequest)
 	httpResponse, err := c.httpClient.Do(httpRequest)
 	if err != nil {
 		return err

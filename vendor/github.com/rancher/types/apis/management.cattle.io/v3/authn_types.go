@@ -24,6 +24,8 @@ type Token struct {
 	Description     string            `json:"description"`
 	Expired         bool              `json:"expired"`
 	ExpiresAt       string            `json:"expiresAt"`
+	Current         bool              `json:"current"`
+	Enabled         *bool             `json:"enabled,omitempty" norman:"default=true"`
 }
 
 type User struct {
@@ -70,6 +72,8 @@ type UserAttribute struct {
 
 	UserName        string
 	GroupPrincipals map[string]Principals // the value is a []Principal, but code generator cannot handle slice as a value
+	LastRefresh     string
+	NeedsRefresh    bool
 }
 
 type Principals struct {
@@ -196,12 +200,14 @@ type ActiveDirectoryConfig struct {
 	UserDisabledBitMask          int64    `json:"userDisabledBitMask,omitempty"         norman:"default=2"`
 	UserSearchBase               string   `json:"userSearchBase,omitempty"              norman:"required"`
 	UserSearchAttribute          string   `json:"userSearchAttribute,omitempty"         norman:"default=sAMAccountName|sn|givenName,required"`
+	UserSearchFilter             string   `json:"userSearchFilter,omitempty"`
 	UserLoginAttribute           string   `json:"userLoginAttribute,omitempty"          norman:"default=sAMAccountName,required"`
 	UserObjectClass              string   `json:"userObjectClass,omitempty"             norman:"default=person,required"`
 	UserNameAttribute            string   `json:"userNameAttribute,omitempty"           norman:"default=name,required"`
 	UserEnabledAttribute         string   `json:"userEnabledAttribute,omitempty"        norman:"default=userAccountControl,required"`
 	GroupSearchBase              string   `json:"groupSearchBase,omitempty"`
 	GroupSearchAttribute         string   `json:"groupSearchAttribute,omitempty"        norman:"default=sAMAccountName,required"`
+	GroupSearchFilter            string   `json:"groupSearchFilter,omitempty"`
 	GroupObjectClass             string   `json:"groupObjectClass,omitempty"            norman:"default=group,required"`
 	GroupNameAttribute           string   `json:"groupNameAttribute,omitempty"          norman:"default=name,required"`
 	GroupDNAttribute             string   `json:"groupDNAttribute,omitempty"            norman:"default=distinguishedName,required"`
@@ -277,7 +283,7 @@ type SamlConfig struct {
 
 	IDPMetadataContent string `json:"idpMetadataContent" norman:"required"`
 	SpCert             string `json:"spCert"             norman:"required"`
-	SpKey              string `json:"spKey"              norman:"required"`
+	SpKey              string `json:"spKey"              norman:"required,type=password"`
 	GroupsField        string `json:"groupsField"        norman:"required"`
 	DisplayNameField   string `json:"displayNameField"   norman:"required"`
 	UserNameField      string `json:"userNameField"      norman:"required"`
@@ -298,5 +304,9 @@ type PingConfig struct {
 }
 
 type ADFSConfig struct {
+	SamlConfig `json:",inline" mapstructure:",squash"`
+}
+
+type KeyCloakConfig struct {
 	SamlConfig `json:",inline" mapstructure:",squash"`
 }
