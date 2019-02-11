@@ -83,6 +83,9 @@ func (s *Schemas) newSchemaFromType(version *APIVersion, t reflect.Type, typeNam
 		CollectionActions: map[string]Action{},
 	}
 
+	s.processingTypes[t] = schema
+	defer delete(s.processingTypes, t)
+
 	if err := s.readFields(schema, t); err != nil {
 		return nil, err
 	}
@@ -99,6 +102,8 @@ func (s *Schemas) setupFilters(schema *Schema) {
 		switch field.Type {
 		case "enum":
 			mods = []ModifierType{ModifierEQ, ModifierNE, ModifierIn, ModifierNotIn}
+		case "date":
+			fallthrough
 		case "dnsLabel":
 			fallthrough
 		case "hostname":
@@ -144,6 +149,11 @@ func (s *Schemas) importType(version *APIVersion, t reflect.Type, overrides ...r
 	existing := s.Schema(version, typeName)
 	if existing != nil {
 		return existing, nil
+	}
+
+	if s, ok := s.processingTypes[t]; ok {
+		logrus.Debugf("Returning half built schema %s for %v", typeName, t)
+		return s, nil
 	}
 
 	logrus.Debugf("Inspecting schema %s for %v", typeName, t)
@@ -284,8 +294,12 @@ func (s *Schemas) readFields(schema *Schema, t reflect.Type) error {
 			schemaField.Nullable = false
 			schemaField.Default = false
 		} else if fieldType.Kind() == reflect.Int ||
+			fieldType.Kind() == reflect.Uint32 ||
 			fieldType.Kind() == reflect.Int32 ||
-			fieldType.Kind() == reflect.Int64 {
+			fieldType.Kind() == reflect.Uint64 ||
+			fieldType.Kind() == reflect.Int64 ||
+			fieldType.Kind() == reflect.Float32 ||
+			fieldType.Kind() == reflect.Float64 {
 			schemaField.Nullable = false
 			schemaField.Default = 0
 		}
@@ -297,7 +311,7 @@ func (s *Schemas) readFields(schema *Schema, t reflect.Type) error {
 		if schemaField.Type == "" {
 			inferedType, err := s.determineSchemaType(&schema.Version, fieldType)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed inspecting type %s, field %s: %v", t, fieldName, err)
 			}
 			schemaField.Type = inferedType
 		}
@@ -306,6 +320,12 @@ func (s *Schemas) readFields(schema *Schema, t reflect.Type) error {
 			switch schemaField.Type {
 			case "int":
 				n, err := convert.ToNumber(schemaField.Default)
+				if err != nil {
+					return err
+				}
+				schemaField.Default = n
+			case "float":
+				n, err := convert.ToFloat(schemaField.Default)
 				if err != nil {
 					return err
 				}
@@ -419,6 +439,13 @@ func getKeyValue(input string) (string, string) {
 	return key, value
 }
 
+func deRef(p reflect.Type) reflect.Type {
+	if p.Kind() == reflect.Ptr {
+		return p.Elem()
+	}
+	return p
+}
+
 func (s *Schemas) determineSchemaType(version *APIVersion, t reflect.Type) (string, error) {
 	switch t.Kind() {
 	case reflect.Uint8:
@@ -429,18 +456,26 @@ func (s *Schemas) determineSchemaType(version *APIVersion, t reflect.Type) (stri
 		fallthrough
 	case reflect.Int32:
 		fallthrough
+	case reflect.Uint32:
+		fallthrough
+	case reflect.Uint64:
+		fallthrough
 	case reflect.Int64:
 		return "int", nil
+	case reflect.Float32:
+		fallthrough
+	case reflect.Float64:
+		return "float", nil
 	case reflect.Interface:
 		return "json", nil
 	case reflect.Map:
-		subType, err := s.determineSchemaType(version, t.Elem())
+		subType, err := s.determineSchemaType(version, deRef(t.Elem()))
 		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("map[%s]", subType), nil
 	case reflect.Slice:
-		subType, err := s.determineSchemaType(version, t.Elem())
+		subType, err := s.determineSchemaType(version, deRef(t.Elem()))
 		if err != nil {
 			return "", err
 		}

@@ -2,7 +2,7 @@ package common
 
 import (
 	"io"
-	"log"
+	//"log"
 	"math/rand"
 	"net/url"
 	"reflect"
@@ -117,7 +117,7 @@ func getUrlQueriesEncoded(params map[string]string) string {
 func (r *BaseRequest) GetBodyReader() io.Reader {
 	if r.httpMethod == POST {
 		s := getUrlQueriesEncoded(r.params)
-		log.Printf("[DEBUG] body: %s", s)
+		//log.Printf("[DEBUG] body: %s", s)
 		return strings.NewReader(s)
 	} else {
 		return strings.NewReader("")
@@ -154,12 +154,11 @@ func CompleteCommonParams(request Request, region string) {
 	params["Action"] = request.GetAction()
 	params["Timestamp"] = strconv.FormatInt(time.Now().Unix(), 10)
 	params["Nonce"] = strconv.Itoa(rand.Int())
-	//params["RequestClient"] = "SDK_GO_3.0.28"
+	params["RequestClient"] = "SDK_GO_3.0.29"
 }
 
 func ConstructParams(req Request) (err error) {
 	value := reflect.ValueOf(req).Elem()
-	//log.Printf("d1: %v", req.GetUrl())
 	err = flatStructure(value, req, "")
 	//log.Printf("[DEBUG] params=%s", req.GetParams())
 	return
@@ -168,7 +167,6 @@ func ConstructParams(req Request) (err error) {
 func flatStructure(value reflect.Value, request Request, prefix string) (err error) {
 	//log.Printf("[DEBUG] reflect value: %v", value.Type())
 	valueType := value.Type()
-	//log.Printf("%v", request.GetUrl())
 	for i := 0; i < valueType.NumField(); i++ {
 		tag := valueType.Field(i).Tag
 		nameTag, hasNameTag := tag.Lookup("name")

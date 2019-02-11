@@ -36,27 +36,6 @@ const (
 type Driver struct {
 	driverCapabilities types.Capabilities
 }
-
-// GetK8SCapabilities defines TKE k8s capabilities
-func (d *Driver) GetK8SCapabilities(ctx context.Context, opts *types.DriverOptions) (*types.K8SCapabilities, error) {
-	capabilities := &types.K8SCapabilities{
-		L4LoadBalancer: &types.LoadBalancerCapabilities{
-			Enabled:              true,
-			Provider:             "Tencent Cloud L4 LB",
-			ProtocolsSupported:   []string{"TCP", "UDP"},
-			HealthCheckSupported: true,
-		},
-	}
-
-	capabilities.IngressControllers = []*types.IngressCapabilities{
-		{
-			IngressProvider:      "Tencent Cloud Ingress",
-			CustomDefaultBackend: true,
-		},
-	}
-	return capabilities, nil
-}
-
 type state struct {
 	// The id of the cluster
 	ClusterID string
@@ -399,20 +378,33 @@ func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
 
 func (s *state) validate() error {
 	if s.ClusterName == "" {
-		return fmt.Errorf("clusterName is required")
+		return fmt.Errorf("cluster name is required")
 	} else if s.ClusterCIDR == "" {
-		return fmt.Errorf("clusterCidr is required")
+		return fmt.Errorf("cluster cidr is required")
+	} else if s.ClusterVersion == "" {
+		return fmt.Errorf("cluster version is required")
+	} else if s.Region == "" {
+		return fmt.Errorf("cluster region is required")
+	} else if s.SubnetID == "" {
+		return fmt.Errorf("cluster subnetID is required")
+	} else if s.ZoneID == "" {
+		return fmt.Errorf("cluster zoneID is required")
+	} else if s.VpcID == "" {
+		return fmt.Errorf("cluster vpcID is required")
 	} else if s.SecretID == "" {
 		return fmt.Errorf("secretID is required")
 	} else if s.SecretKey == "" {
 		return fmt.Errorf("secretKey is required")
-	} else if s.Region == "" {
-		return fmt.Errorf("region is required")
+	} else if s.RootSize == 0 {
+		return fmt.Errorf("rootSize should not be set to 0")
+	} else if s.StorageSize == 0 {
+		return fmt.Errorf("storageSize should not be set to 0")
 	}
+
 	return nil
 }
 
-func (d *Driver) getTKEServiceClient(ctx context.Context, state *state, method string) (*ccs.Client, error) {
+func getTKEServiceClient(ctx context.Context, state *state, method string) (*ccs.Client, error) {
 	credential := tccommon.NewCredential(state.SecretID, state.SecretKey)
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = "ccs.api.qcloud.com/v2/index.php"
@@ -436,7 +428,7 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 	}
 
 	// init tke service client
-	svc, err := d.getTKEServiceClient(ctx, state, "POST")
+	svc, err := getTKEServiceClient(ctx, state, "POST")
 	if err != nil {
 		return nil, err
 	}
@@ -454,11 +446,10 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 
 	if err == nil {
 		state.ClusterID = resp.Data.ClusterID
-		fmt.Printf("resp data str: %s\n", state.ClusterID)
 		logrus.Debugf("Cluster %s create is called for region %s and zone %s. Status Code %v", state.ClusterID, state.Region, state.ZoneID, resp.Code)
 	}
 
-	if err := d.waitTKECluster(ctx, svc, state); err != nil {
+	if err := waitTKECluster(ctx, svc, state); err != nil {
 		return nil, err
 	}
 
@@ -480,26 +471,38 @@ func (d *Driver) getWrapCreateClusterRequest(state *state) (*ccs.CreateClusterRe
 	return request, nil
 }
 
-func (d *Driver) waitTKECluster(ctx context.Context, svc *ccs.Client, state *state) error {
+func waitTKECluster(ctx context.Context, svc *ccs.Client, state *state) error {
 	lastMsg := ""
+	timeout := time.Duration(30 * time.Minute)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	tick := TickerContext(timeoutCtx, 15*time.Second)
+	defer cancel()
+
+	// Keep trying until we're timed out or got a result or got an error
 	for {
-		cluster, err := getCluster(svc, state)
-		if err != nil && !strings.Contains(err.Error(), notReadyStatus) {
-			return err
-		}
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeoutCtx.Done():
+			return fmt.Errorf("timed out waiting cluster %s to be ready", state.ClusterName)
+		// Got a tick, check cluster provisioning status
+		case <-tick:
+			cluster, err := getCluster(svc, state)
+			if err != nil && !strings.Contains(err.Error(), notReadyStatus) {
+				return err
+			}
 
-		if cluster.CodeDesc != lastMsg {
-			log.Infof(ctx, "provisioning cluster %s: %s", state.ClusterName, cluster.CodeDesc)
-			lastMsg = cluster.CodeDesc
-		}
+			if cluster.CodeDesc != lastMsg {
+				log.Infof(ctx, "provisioning cluster %s: %s", state.ClusterName, cluster.CodeDesc)
+				lastMsg = cluster.CodeDesc
+			}
 
-		if cluster.Data.Clusters[0].Status == runningStatus {
-			log.Infof(ctx, "cluster %v is running", state.ClusterName)
-			return nil
-		} else if cluster.Data.Clusters[0].Status == failedStatus {
-			return fmt.Errorf("tencent cloud failed to provision cluster: %s", cluster.Message)
+			if cluster.Data.Clusters[0].Status == runningStatus {
+				log.Infof(ctx, "cluster %v is running", state.ClusterName)
+				return nil
+			} else if cluster.Data.Clusters[0].Status == failedStatus {
+				return fmt.Errorf("tencent cloud failed to provision cluster: %s", cluster.Message)
+			}
 		}
-		time.Sleep(time.Second * 15)
 	}
 }
 
@@ -512,8 +515,7 @@ func getCluster(svc *ccs.Client, state *state) (*ccs.DescribeClusterResponse, er
 
 	resp, err := svc.DescribeCluster(req)
 	if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
-		fmt.Printf("An API error has returned: %s\n", err)
-		return resp, err
+		return resp, fmt.Errorf("an API error has returned: %s", err)
 	}
 
 	if resp.Data.TotalCount <= 0 {
@@ -565,7 +567,7 @@ func (d *Driver) Update(ctx context.Context, info *types.ClusterInfo, opts *type
 }
 
 func getClusterCerts(svc *ccs.Client, state *state) (*ccs.DescribeClusterSecurityInfoResponse, error) {
-	logrus.Infof("invoking getClusterCerts")
+	logrus.Info("invoking getClusterCerts")
 
 	request := ccs.NewDescribeClusterSecurityInfoRequest()
 	content, err := json.Marshal(state)
@@ -579,77 +581,18 @@ func getClusterCerts(svc *ccs.Client, state *state) (*ccs.DescribeClusterSecurit
 
 	resp, err := svc.DescribeClusterSecurityInfo(request)
 	if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
-		fmt.Printf("An API error has returned: %s\n", err)
-		return resp, err
+		return resp, fmt.Errorf("an API error has returned: %s", err)
 	}
 	return resp, nil
 }
 
 // PostCheck implements driver postCheck interface
 func (d *Driver) PostCheck(ctx context.Context, info *types.ClusterInfo) (*types.ClusterInfo, error) {
-	logrus.Infof("Starting post-check")
-	state, err := getState(info)
+	logrus.Info("starting post-check")
+	clientSet, err := getClientSet(ctx, info)
 	if err != nil {
 		return nil, err
 	}
-	svc, err := d.getTKEServiceClient(ctx, state, "GET")
-	if err != nil {
-		return nil, err
-	}
-
-	if err := d.waitTKECluster(ctx, svc, state); err != nil {
-		return nil, err
-	}
-
-	cluster, err := getCluster(svc, state)
-	if err != nil {
-		return nil, err
-	}
-
-	certs, err := getClusterCerts(svc, state)
-	if err != nil {
-		return nil, err
-	}
-
-	if certs.Data.ClusterExternalEndpoint == "" {
-		err := d.operateClusterVip(ctx, svc, state.ClusterID, "Create")
-		if err != nil {
-			return nil, err
-		}
-
-		// update cluster certs with new generated cluster vip
-		certs, err = getClusterCerts(svc, state)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	info.Version = cluster.Data.Clusters[0].K8sVersion
-	info.Endpoint = certs.Data.ClusterExternalEndpoint
-	info.RootCaCertificate = base64.StdEncoding.EncodeToString([]byte(certs.Data.CertificationAuthority))
-	info.Username = certs.Data.UserName
-	info.Password = certs.Data.Password
-	info.NodeCount = cluster.Data.Clusters[0].NodeNum
-	info.Status = cluster.Data.Clusters[0].Status
-
-	host := info.Endpoint
-	if !strings.HasPrefix(host, "https://") {
-		host = fmt.Sprintf("https://%s", host)
-	}
-
-	config := &rest.Config{
-		Host:     host,
-		Username: certs.Data.UserName,
-		Password: certs.Data.Password,
-		TLSClientConfig: rest.TLSClientConfig{
-			CAData: []byte(certs.Data.CertificationAuthority),
-		},
-	}
-	clientSet, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("error creating clientset: %v", err)
-	}
-
 	failureCount := 0
 	for {
 		info.ServiceAccountToken, err = util.GenerateServiceAccountToken(clientSet)
@@ -679,7 +622,7 @@ func (d *Driver) Remove(ctx context.Context, info *types.ClusterInfo) error {
 	if err != nil {
 		return err
 	}
-	svc, err := d.getTKEServiceClient(ctx, state, "GET")
+	svc, err := getTKEServiceClient(ctx, state, "GET")
 	if err != nil {
 		return err
 	}
@@ -726,7 +669,7 @@ func (d *Driver) GetClusterSize(ctx context.Context, info *types.ClusterInfo) (*
 	if err != nil {
 		return nil, err
 	}
-	svc, err := d.getTKEServiceClient(ctx, state, "GET")
+	svc, err := getTKEServiceClient(ctx, state, "GET")
 	if err != nil {
 		return nil, err
 	}
@@ -743,7 +686,7 @@ func (d *Driver) GetVersion(ctx context.Context, info *types.ClusterInfo) (*type
 	if err != nil {
 		return nil, err
 	}
-	svc, err := d.getTKEServiceClient(ctx, state, "GET")
+	svc, err := getTKEServiceClient(ctx, state, "GET")
 	if err != nil {
 		return nil, err
 	}
@@ -755,8 +698,8 @@ func (d *Driver) GetVersion(ctx context.Context, info *types.ClusterInfo) (*type
 }
 
 // operateClusterVip creates or remove the cluster vip
-func (d *Driver) operateClusterVip(ctx context.Context, svc *ccs.Client, clusterID, operation string) error {
-	logrus.Infof("invoking operateClusterVip")
+func operateClusterVip(ctx context.Context, svc *ccs.Client, clusterID, operation string) error {
+	logrus.Info("invoking operateClusterVip")
 
 	req := ccs.NewOperateClusterVipRequest()
 	req.ClusterID = clusterID
@@ -768,9 +711,8 @@ func (d *Driver) operateClusterVip(ctx context.Context, svc *ccs.Client, cluster
 
 		if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
 			if !strings.Contains(err.Error(), processRunningStatus) {
-				return err
+				return fmt.Errorf("an API error has returned: %s", err)
 			}
-			fmt.Printf("An API error has returned: %s\n", err)
 		}
 
 		if resp.CodeDesc == successStatus && count >= 1 {
@@ -792,4 +734,111 @@ func (d *Driver) SetClusterSize(ctx context.Context, info *types.ClusterInfo, co
 func (d *Driver) SetVersion(ctx context.Context, info *types.ClusterInfo, version *types.KubernetesVersion) error {
 	logrus.Info("unimplemented")
 	return nil
+}
+
+// RemoveLegacyServiceAccount remove any old service accounts that the driver has created
+func (d *Driver) RemoveLegacyServiceAccount(ctx context.Context, info *types.ClusterInfo) error {
+	//func (d *Driver) RemoveLegacyServiceAccount(ctx context.Context, info *types.ClusterInfo) error {
+	clientSet, err := getClientSet(ctx, info)
+	if err != nil {
+		return err
+	}
+
+	return util.DeleteLegacyServiceAccountAndRoleBinding(clientSet)
+}
+
+// getClientSet returns cluster clientSet
+func getClientSet(ctx context.Context, info *types.ClusterInfo) (kubernetes.Interface, error) {
+	state, err := getState(info)
+	if err != nil {
+		return nil, err
+	}
+	svc, err := getTKEServiceClient(ctx, state, "GET")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := waitTKECluster(ctx, svc, state); err != nil {
+		return nil, err
+	}
+
+	cluster, err := getCluster(svc, state)
+	if err != nil {
+		return nil, err
+	}
+
+	certs, err := getClusterCerts(svc, state)
+	if err != nil {
+		return nil, err
+	}
+
+	if certs.Data.ClusterExternalEndpoint == "" {
+		err := operateClusterVip(ctx, svc, state.ClusterID, "Create")
+		if err != nil {
+			return nil, err
+		}
+
+		// update cluster certs with new generated cluster vip
+		certs, err = getClusterCerts(svc, state)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	info.Version = cluster.Data.Clusters[0].K8sVersion
+	info.Endpoint = certs.Data.ClusterExternalEndpoint
+	info.RootCaCertificate = base64.StdEncoding.EncodeToString([]byte(certs.Data.CertificationAuthority))
+	info.Username = certs.Data.UserName
+	info.Password = certs.Data.Password
+	info.NodeCount = cluster.Data.Clusters[0].NodeNum
+	info.Status = cluster.Data.Clusters[0].Status
+
+	host := info.Endpoint
+	if !strings.HasPrefix(host, "https://") {
+		host = fmt.Sprintf("https://%s", host)
+	}
+
+	config := &rest.Config{
+		Host:     host,
+		Username: certs.Data.UserName,
+		Password: certs.Data.Password,
+		TLSClientConfig: rest.TLSClientConfig{
+			CAData: []byte(certs.Data.CertificationAuthority),
+		},
+	}
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating clientset: %v", err)
+	}
+	return clientSet, nil
+}
+
+// ETCDSave will backup etcd snapshot to s3 server
+func (d *Driver) ETCDSave(ctx context.Context, info *types.ClusterInfo, opts *types.DriverOptions, snapshotName string) error {
+	return fmt.Errorf("ETCD backup operations are not implemented")
+}
+
+// ETCDRestore will restore etcd snapshot from s3 server
+func (d *Driver) ETCDRestore(ctx context.Context, info *types.ClusterInfo, opts *types.DriverOptions, snapshotName string) error {
+	return fmt.Errorf("ETCD backup operations are not implemented")
+}
+
+// GetK8SCapabilities defines TKE k8s capabilities
+func (d *Driver) GetK8SCapabilities(ctx context.Context, opts *types.DriverOptions) (*types.K8SCapabilities, error) {
+	capabilities := &types.K8SCapabilities{
+		L4LoadBalancer: &types.LoadBalancerCapabilities{
+			Enabled:              true,
+			Provider:             "Tencent Cloud L4 LB",
+			ProtocolsSupported:   []string{"TCP", "UDP"},
+			HealthCheckSupported: true,
+		},
+	}
+
+	capabilities.IngressControllers = []*types.IngressCapabilities{
+		{
+			IngressProvider:      "Tencent Cloud Ingress",
+			CustomDefaultBackend: true,
+		},
+	}
+	return capabilities, nil
 }
