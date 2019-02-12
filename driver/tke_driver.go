@@ -438,10 +438,13 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 		return nil, err
 	}
 
+	info := &types.ClusterInfo{}
+	defer storeState(info, state)
+
 	// init tke client and make create cluster api request
 	resp, err := svc.CreateCluster(req, state.EmptyCluster)
 	if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
-		return nil, err
+		return info, err
 	}
 
 	if err == nil {
@@ -450,11 +453,10 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 	}
 
 	if err := waitTKECluster(ctx, svc, state); err != nil {
-		return nil, err
+		return info, err
 	}
 
-	info := &types.ClusterInfo{}
-	return info, storeState(info, state)
+	return info, nil
 }
 
 func (d *Driver) getWrapCreateClusterRequest(state *state) (*ccs.CreateClusterRequest, error) {
@@ -618,10 +620,17 @@ func (d *Driver) PostCheck(ctx context.Context, info *types.ClusterInfo) (*types
 
 // Remove implements driver remove interface
 func (d *Driver) Remove(ctx context.Context, info *types.ClusterInfo) error {
+	logrus.Info("invoking removeCluster")
 	state, err := getState(info)
 	if err != nil {
 		return err
 	}
+
+	if state == nil || state.ClusterID == "" {
+		logrus.Infof("Cluster %s clusterId doesn't exist", state.ClusterName)
+		return nil
+	}
+
 	svc, err := getTKEServiceClient(ctx, state, "GET")
 	if err != nil {
 		return err
@@ -645,7 +654,7 @@ func (d *Driver) Remove(ctx context.Context, info *types.ClusterInfo) error {
 }
 
 func (d *Driver) getWrapRemoveClusterRequest(state *state) (*ccs.DeleteClusterRequest, error) {
-	logrus.Info("invoking removeCluster")
+	logrus.Info("invoking get remove cluster request")
 	request := ccs.NewDeleteClusterRequest()
 	content, err := json.Marshal(state)
 	if err != nil {
