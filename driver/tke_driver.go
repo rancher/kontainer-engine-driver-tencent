@@ -123,6 +123,8 @@ type state struct {
 
 	// cluster info
 	ClusterInfo types.ClusterInfo
+	// The total number of worker node
+	NodeCount int64
 }
 
 // NewDriver init the TKE driver
@@ -138,7 +140,6 @@ func NewDriver() types.Driver {
 	driver.driverCapabilities.AddCapability(types.SetVersionCapability)
 	driver.driverCapabilities.AddCapability(types.GetClusterSizeCapability)
 	driver.driverCapabilities.AddCapability(types.SetClusterSizeCapability)
-
 	return driver
 }
 
@@ -173,16 +174,19 @@ func (d *Driver) GetDriverCreateOptions(ctx context.Context) (*types.DriverFlags
 		Usage: "The IP address range of the container pods, must not conflict with VPC CIDR",
 	}
 	driverFlag.Options["ignore-cluster-cidr-conflict"] = &types.Flag{
-		Type:  types.BoolType,
-		Usage: "Whether to ignore the ClusterCIDR conflict error, the default is 0",
+		Type:    types.IntType,
+		Usage:   "Whether to ignore the ClusterCIDR conflict error, the default is 0",
+		Default: &types.Default{DefaultInt: 0},
 	}
 	driverFlag.Options["cluster-version"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The version of the cluster",
+		Type:    types.StringType,
+		Usage:   "The version of the cluster",
+		Default: &types.Default{DefaultString: "1.10.5"},
 	}
 	driverFlag.Options["empty-cluster"] = &types.Flag{
-		Type:  types.BoolType,
-		Usage: "Create a empty cluster",
+		Type:    types.BoolType,
+		Usage:   "Create a empty cluster",
+		Default: &types.Default{DefaultBool: false},
 	}
 	driverFlag.Options["region"] = &types.Flag{
 		Type:  types.StringType,
@@ -196,9 +200,9 @@ func (d *Driver) GetDriverCreateOptions(ctx context.Context) (*types.DriverFlags
 		Type:  types.StringType,
 		Usage: "The zone id of the cluster",
 	}
-	driverFlag.Options["goods-num"] = &types.Flag{
+	driverFlag.Options["node-count"] = &types.Flag{
 		Type:  types.IntType,
-		Usage: "The number of nodes purchased, up to 100",
+		Usage: "The node count of the cluster, up to 100",
 	}
 	driverFlag.Options["cpu"] = &types.Flag{
 		Type:  types.IntType,
@@ -209,32 +213,38 @@ func (d *Driver) GetDriverCreateOptions(ctx context.Context) (*types.DriverFlags
 		Usage: "Memory size (GB)",
 	}
 	driverFlag.Options["os-name"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The name of the operating system , currently supports Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64",
+		Type:    types.StringType,
+		Usage:   "The name of the operating system , currently supports Centos7.2x86_64 or ubuntu16.04.1 LTSx86_64",
+		Default: &types.Default{DefaultString: "ubuntu16.04.1 LTSx86_64"},
 	}
 	driverFlag.Options["instance-type"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "See CVM Instance Configuration for details . Default: S1.SMALL1",
+		Type:    types.StringType,
+		Usage:   "See CVM Instance Configuration for details . Default: S2.MEDIUM4",
+		Default: &types.Default{DefaultString: "S2.MEDIUM4"},
 	}
 	driverFlag.Options["cvm-type"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The type of node, the default is charged by volume ",
+		Type:    types.StringType,
+		Usage:   "The cvm type of node, default to PayByHour",
+		Default: &types.Default{DefaultString: "PayByHour"},
 	}
 	driverFlag.Options["renew-flag"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The annual renewal fee for the annual subscription, default to NOTIFY_AND_AUTO_RENEW",
 	}
 	driverFlag.Options["bandwidth-type"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "Type of bandwidth",
+		Type:    types.StringType,
+		Usage:   "Type of bandwidth",
+		Default: &types.Default{DefaultString: "PayByHour"},
 	}
 	driverFlag.Options["bandwidth"] = &types.Flag{
-		Type:  types.IntType,
-		Usage: "Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak",
+		Type:    types.IntType,
+		Usage:   "Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak",
+		Default: &types.Default{DefaultInt: 10},
 	}
 	driverFlag.Options["wan-ip"] = &types.Flag{
-		Type:  types.IntType,
-		Usage: "the cluster master occupies the IP of a VPC subnet",
+		Type:    types.IntType,
+		Usage:   "the cluster master occupies the IP of a VPC subnet",
+		Default: &types.Default{DefaultInt: 1},
 	}
 	driverFlag.Options["vpc-id"] = &types.Flag{
 		Type:  types.StringType,
@@ -245,24 +255,29 @@ func (d *Driver) GetDriverCreateOptions(ctx context.Context) (*types.DriverFlags
 		Usage: "Subnet ID, please fill out the inquiry list of subnets interface returned unSubnetId (unified subnet ID) field",
 	}
 	driverFlag.Options["is-vpc-gateway"] = &types.Flag{
-		Type:  types.IntType,
-		Usage: "Whether it is a public network gateway, network gateway only in public with a public IP, and in order to work properly when under private network",
+		Type:    types.IntType,
+		Usage:   "Whether it is a public network gateway, network gateway only in public with a public IP, and in order to work properly when under private network",
+		Default: &types.Default{DefaultInt: 0},
 	}
 	driverFlag.Options["root-size"] = &types.Flag{
-		Type:  types.IntType,
-		Usage: "System disk size. Linux system adjustment range is 20 - 50G, step size is 1",
+		Type:    types.IntType,
+		Usage:   "System disk size. Linux system adjustment range is 20 - 50G, step size is 1",
+		Default: &types.Default{DefaultInt: 25},
 	}
 	driverFlag.Options["root-type"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "System disk type. System disk type restrictions are detailed in the CVM instance configuration",
+		Type:    types.StringType,
+		Usage:   "System disk type. System disk type restrictions are detailed in the CVM instance configuration",
+		Default: &types.Default{DefaultString: "CLOUD_BASIC"},
 	}
 	driverFlag.Options["storage-size"] = &types.Flag{
-		Type:  types.IntType,
-		Usage: "Data disk size (GB), the step size is 10",
+		Type:    types.IntType,
+		Usage:   "Data disk size (GB), the step size is 10",
+		Default: &types.Default{DefaultInt: 20},
 	}
 	driverFlag.Options["storage-type"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "Data disk type, default value of the SSD cloud drive",
+		Type:    types.StringType,
+		Usage:   "Data disk type, default value of the SSD cloud drive",
+		Default: &types.Default{DefaultString: "CLOUD_BASIC"},
 	}
 	driverFlag.Options["password"] = &types.Flag{
 		Type:  types.StringType,
@@ -296,22 +311,6 @@ func (d *Driver) GetDriverUpdateOptions(ctx context.Context) (*types.DriverFlags
 	driverFlag := types.DriverFlags{
 		Options: make(map[string]*types.Flag),
 	}
-	driverFlag.Options["cluster-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The ID of the existing cluster",
-	}
-	driverFlag.Options["cluster-name"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The name of the cluster that should be displayed to the user",
-	}
-	driverFlag.Options["vpc-id"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The private vpc id the cluster",
-	}
-	driverFlag.Options["cluster-desc"] = &types.Flag{
-		Type:  types.StringType,
-		Usage: "The description of the cluster",
-	}
 	driverFlag.Options["secret-id"] = &types.Flag{
 		Type:  types.StringType,
 		Usage: "The secretID of the cluster",
@@ -321,11 +320,55 @@ func (d *Driver) GetDriverUpdateOptions(ctx context.Context) (*types.DriverFlags
 		Password: true,
 		Usage:    "The secretKey of the cluster",
 	}
+	driverFlag.Options["node-count"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The number of nodes purchased, up to 100",
+	}
+	driverFlag.Options["instance-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "See CVM Instance Configuration for details . Default: S2.MEDIUM4",
+	}
+	driverFlag.Options["storage-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Data disk size (GB), the step size is 10",
+	}
+	driverFlag.Options["root-size"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "System disk size. Linux system adjustment range is 20 - 50G, step size is 1",
+	}
+	driverFlag.Options["cluster-name"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The name of the cluster that should be displayed to the user",
+	}
+	driverFlag.Options["cluster-desc"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "The description of the cluster",
+	}
+	driverFlag.Options["project-id"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "The ID of your project to use when creating a cluster",
+	}
+	driverFlag.Options["bandwidth-type"] = &types.Flag{
+		Type:  types.StringType,
+		Usage: "Type of bandwidth, PayByTraffic or PayByHour",
+	}
+	driverFlag.Options["bandwidth"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Public network bandwidth (Mbps), when the traffic is charged for the public network bandwidth peak",
+	}
+	driverFlag.Options["wan-ip"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "the cluster master occupies the IP of a VPC subnet",
+	}
+	driverFlag.Options["is-vpc-gateway"] = &types.Flag{
+		Type:  types.IntType,
+		Usage: "Whether it is a public network gateway, network gateway only in public with a public IP, and in order to work properly when under private network",
+	}
 	return &driverFlag, nil
 }
 
 // getStateFromOpts gets input values from opts
-func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
+func getStateFromOpts(driverOptions *types.DriverOptions, isCreate bool) (*state, error) {
 	d := &state{
 		ClusterInfo: types.ClusterInfo{
 			Metadata: map[string]string{},
@@ -334,22 +377,15 @@ func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
 	d.ClusterName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-name", "clusterName").(string)
 	d.ClusterDesc = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-desc", "clusterDesc").(string)
 	d.ClusterCIDR = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-cidr", "clusterCidr").(string)
-	d.IgnoreClusterCIDRConflict = 0
-	if options.GetValueFromDriverOptions(driverOptions, types.BoolType, "ingore-cluster-cidr-conflict", "ignoreClusterCidrConflict").(bool) {
-		d.IgnoreClusterCIDRConflict = 1
-	}
+	d.IgnoreClusterCIDRConflict = options.GetValueFromDriverOptions(driverOptions, types.IntType, "ingore-cluster-cidr-conflict", "ignoreClusterCidrConflict").(int64)
 	d.ClusterVersion = options.GetValueFromDriverOptions(driverOptions, types.StringType, "cluster-version", "clusterVersion").(string)
-	d.EmptyCluster = false
-	if options.GetValueFromDriverOptions(driverOptions, types.BoolType, "empty-cluster", "emptyCluster").(bool) == true {
-		d.EmptyCluster = true
-	}
+	d.EmptyCluster = options.GetValueFromDriverOptions(driverOptions, types.BoolType, "empty-cluster", "emptyCluster").(bool)
 	d.Region = options.GetValueFromDriverOptions(driverOptions, types.StringType, "region").(string)
 	d.SecretID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "secret-id", "secretId").(string)
 	d.SecretKey = options.GetValueFromDriverOptions(driverOptions, types.StringType, "secret-key", "secretKey").(string)
 	d.ProjectID = options.GetValueFromDriverOptions(driverOptions, types.IntType, "project-id", "projectId").(int64)
 
 	d.ZoneID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "zone-id", "zoneId").(string)
-	d.GoodsNum = options.GetValueFromDriverOptions(driverOptions, types.IntType, "goods-num", "goodsNum").(int64)
 	d.CPU = options.GetValueFromDriverOptions(driverOptions, types.IntType, "cpu").(int64)
 	d.Mem = options.GetValueFromDriverOptions(driverOptions, types.IntType, "mem").(int64)
 	d.OsName = options.GetValueFromDriverOptions(driverOptions, types.StringType, "os-name", "osName").(string)
@@ -372,39 +408,43 @@ func getStateFromOpts(driverOptions *types.DriverOptions) (*state, error) {
 	d.SgID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "sg-id", "sgId").(string)
 	d.MasterSubnetID = options.GetValueFromDriverOptions(driverOptions, types.StringType, "master-subnet-id", "masterSubnetId").(string)
 	d.UserScript = options.GetValueFromDriverOptions(driverOptions, types.StringType, "user-script", "userScript").(string)
+	d.NodeCount = options.GetValueFromDriverOptions(driverOptions, types.IntType, "node-count", "nodeCount").(int64)
 
-	return d, d.validate()
+	return d, d.validate(isCreate)
 }
 
-func (s *state) validate() error {
-	if s.ClusterName == "" {
-		return fmt.Errorf("cluster name is required")
-	} else if s.ClusterCIDR == "" {
-		return fmt.Errorf("cluster cidr is required")
-	} else if s.ClusterVersion == "" {
-		return fmt.Errorf("cluster version is required")
-	} else if s.Region == "" {
-		return fmt.Errorf("cluster region is required")
-	} else if s.SubnetID == "" {
-		return fmt.Errorf("cluster subnetID is required")
-	} else if s.ZoneID == "" {
-		return fmt.Errorf("cluster zoneID is required")
-	} else if s.VpcID == "" {
-		return fmt.Errorf("cluster vpcID is required")
-	} else if s.SecretID == "" {
+func (s *state) validate(isCreate bool) error {
+	if isCreate {
+		if s.ClusterName == "" {
+			return fmt.Errorf("cluster name is required")
+		} else if s.ClusterVersion == "" {
+			return fmt.Errorf("cluster version is required")
+		} else if s.Region == "" {
+			return fmt.Errorf("cluster region is required")
+		} else if s.SubnetID == "" {
+			return fmt.Errorf("cluster subnetID is required")
+		} else if s.ZoneID == "" {
+			return fmt.Errorf("cluster zoneID is required")
+		} else if s.VpcID == "" {
+			return fmt.Errorf("cluster vpcID is required")
+		} else if s.RootSize == 0 {
+			return fmt.Errorf("rootSize should not be set to 0")
+		} else if s.StorageSize == 0 {
+			return fmt.Errorf("storageSize should not be set to 0")
+		} else if s.ClusterCIDR == "" {
+			return fmt.Errorf("cluster cidr is required")
+		}
+	}
+
+	if s.SecretID == "" {
 		return fmt.Errorf("secretID is required")
 	} else if s.SecretKey == "" {
 		return fmt.Errorf("secretKey is required")
-	} else if s.RootSize == 0 {
-		return fmt.Errorf("rootSize should not be set to 0")
-	} else if s.StorageSize == 0 {
-		return fmt.Errorf("storageSize should not be set to 0")
 	}
-
 	return nil
 }
 
-func getTKEServiceClient(ctx context.Context, state *state, method string) (*ccs.Client, error) {
+func getTKEServiceClient(state *state, method string) (*ccs.Client, error) {
 	credential := tccommon.NewCredential(state.SecretID, state.SecretKey)
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = "ccs.api.qcloud.com/v2/index.php"
@@ -422,13 +462,13 @@ func getTKEServiceClient(ctx context.Context, state *state, method string) (*ccs
 
 // Create implements driver create interface
 func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types.ClusterInfo) (*types.ClusterInfo, error) {
-	state, err := getStateFromOpts(opts)
+	state, err := getStateFromOpts(opts, true)
 	if err != nil {
 		return nil, err
 	}
 
 	// init tke service client
-	svc, err := getTKEServiceClient(ctx, state, "POST")
+	svc, err := getTKEServiceClient(state, "POST")
 	if err != nil {
 		return nil, err
 	}
@@ -461,6 +501,7 @@ func (d *Driver) Create(ctx context.Context, opts *types.DriverOptions, _ *types
 
 func (d *Driver) getWrapCreateClusterRequest(state *state) (*ccs.CreateClusterRequest, error) {
 	logrus.Info("invoking createCluster")
+	state.GoodsNum = state.NodeCount
 	request := ccs.NewCreateClusterRequest(state.EmptyCluster)
 	content, err := json.Marshal(state)
 	if err != nil {
@@ -476,7 +517,7 @@ func (d *Driver) getWrapCreateClusterRequest(state *state) (*ccs.CreateClusterRe
 func waitTKECluster(ctx context.Context, svc *ccs.Client, state *state) error {
 	lastMsg := ""
 	timeout := time.Duration(30 * time.Minute)
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	tick := TickerContext(timeoutCtx, 15*time.Second)
 	defer cancel()
 
@@ -564,8 +605,129 @@ func getState(info *types.ClusterInfo) (*state, error) {
 
 // Update implements driver update interface
 func (d *Driver) Update(ctx context.Context, info *types.ClusterInfo, opts *types.DriverOptions) (*types.ClusterInfo, error) {
-	logrus.Info("unimplemented")
-	return nil, fmt.Errorf("not implemented")
+	logrus.Info("Invoking update cluster")
+	state, err := getState(info)
+	if err != nil {
+		return nil, err
+	}
+
+	newState, err := getStateFromOpts(opts, false)
+	if err != nil {
+		return nil, err
+	}
+
+	svc, err := getTKEServiceClient(state, "POST")
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Debugf("Updating config, clusterName: %s, clusterVersion: %s, new node: %v", state.ClusterName, state.ClusterVersion, newState.GoodsNum)
+
+	if state.NodeCount != newState.NodeCount {
+		request := ccs.NewDescribeClusterInstancesRequest()
+		request.ClusterID = state.ClusterID
+		resp, err := svc.DescribeClusterInstance(request)
+		if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+			return nil, fmt.Errorf("an API error has returned: %s", err)
+		}
+		nodeCount := resp.Data.TotalCount
+
+		if newState.NodeCount > nodeCount {
+
+			log.Infof(ctx, "Scaling up cluster nodes to %d", newState.NodeCount)
+			req, err := getWrapAddClusterInstancesRequest(state, newState, nodeCount)
+			if err != nil {
+				return nil, err
+			}
+
+			resp, err := svc.AddClusterInstances(req)
+			if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+				return nil, err
+			}
+			if err == nil {
+				logrus.Infof("Add cluster instances is called for cluster %s. Status Code %v, Response Instance IDs: %s", state.ClusterID, resp.Code, resp.Data.InstanceIDs)
+			}
+			if err := waitTKECluster(ctx, svc, state); err != nil {
+				return nil, err
+			}
+		} else if newState.NodeCount < resp.Data.TotalCount {
+			log.Infof(ctx, "Scaling down cluster nodes to %d", newState.NodeCount)
+			if err := removeClusterInstances(state, newState, svc, resp); err != nil {
+				return nil, err
+			}
+		}
+		state.NodeCount = newState.NodeCount
+	}
+
+	if newState.ClusterName != "" || newState.ClusterDesc != "" {
+		log.Infof(ctx, "Updating cluster %s attributes to name: %s, desc: %s", state.ClusterName, newState.ClusterName, newState.ClusterDesc)
+		req, err := getWrapModifyClusterAttributesRequest(state, newState)
+		if err != nil {
+			return nil, err
+		}
+
+		// init the TKE client
+		resp, err := svc.ModifyClusterAttributes(req)
+		if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+			return nil, err
+		}
+		if err == nil {
+			logrus.Infof("Modify cluster attributes is called for cluster %s. Status Code %v", state.ClusterID, resp.Code)
+		}
+		if err := waitTKECluster(ctx, svc, state); err != nil {
+			return nil, err
+		}
+		state.ClusterName = newState.ClusterName
+		state.ClusterDesc = newState.ClusterDesc
+	}
+
+	if state.ProjectID != newState.ProjectID {
+		log.Infof(ctx, "Updating project id to %d for cluster %s", newState.ProjectID, state.ClusterName)
+		req, err := getWrapModifyProjectIDRequest(state, newState)
+		if err != nil {
+			return nil, err
+		}
+
+		// init the TKE client
+		resp, err := svc.ModifyProjectID(req)
+		if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+			return nil, err
+		}
+		if err == nil {
+			logrus.Infof("Modify cluster projectId is called for cluster %s. Status Code %v", state.ClusterID, resp.Code)
+		}
+		if err := waitTKECluster(ctx, svc, state); err != nil {
+			return nil, err
+		}
+		state.ProjectID = newState.ProjectID
+	}
+	return info, storeState(info, state)
+}
+
+func removeClusterInstances(state, newState *state, svc *ccs.Client, instancesResp *ccs.DescribeClusterInstancesResponse) error {
+	deleteCount := state.NodeCount - newState.NodeCount
+	logrus.Debugf("invoking removeClusterInstances, delete node count: %d", deleteCount)
+
+	if instancesResp.Data.TotalCount < deleteCount {
+		return fmt.Errorf("total count of current cluster nodes is %d, fail to remove requested value of %d",
+			instancesResp.Data.TotalCount, deleteCount)
+	}
+
+	var instanceIds = make([]string, deleteCount)
+	deleteNodes := instancesResp.Data.Nodes[:deleteCount]
+	for i, node := range deleteNodes {
+		instanceIds[i] = node.InstanceID
+	}
+
+	req := ccs.NewDeleteClusterInstancesRequest()
+	req.ClusterID = state.ClusterID
+	req.InstanceIDs = instanceIds
+	rep, err := svc.DeleteClusterInstances(req)
+	if _, ok := err.(*tcerrors.TencentCloudSDKError); ok {
+		return fmt.Errorf("an API error has returned: %s", err)
+	}
+	logrus.Infof("success delete total %d nodes, resp:%v", deleteCount, rep.CodeDesc)
+	return nil
 }
 
 func getClusterCerts(svc *ccs.Client, state *state) (*ccs.DescribeClusterSecurityInfoResponse, error) {
@@ -631,7 +793,7 @@ func (d *Driver) Remove(ctx context.Context, info *types.ClusterInfo) error {
 		return nil
 	}
 
-	svc, err := getTKEServiceClient(ctx, state, "GET")
+	svc, err := getTKEServiceClient(state, "GET")
 	if err != nil {
 		return err
 	}
@@ -678,7 +840,7 @@ func (d *Driver) GetClusterSize(ctx context.Context, info *types.ClusterInfo) (*
 	if err != nil {
 		return nil, err
 	}
-	svc, err := getTKEServiceClient(ctx, state, "GET")
+	svc, err := getTKEServiceClient(state, "GET")
 	if err != nil {
 		return nil, err
 	}
@@ -695,7 +857,7 @@ func (d *Driver) GetVersion(ctx context.Context, info *types.ClusterInfo) (*type
 	if err != nil {
 		return nil, err
 	}
-	svc, err := getTKEServiceClient(ctx, state, "GET")
+	svc, err := getTKEServiceClient(state, "GET")
 	if err != nil {
 		return nil, err
 	}
@@ -747,7 +909,6 @@ func (d *Driver) SetVersion(ctx context.Context, info *types.ClusterInfo, versio
 
 // RemoveLegacyServiceAccount remove any old service accounts that the driver has created
 func (d *Driver) RemoveLegacyServiceAccount(ctx context.Context, info *types.ClusterInfo) error {
-	//func (d *Driver) RemoveLegacyServiceAccount(ctx context.Context, info *types.ClusterInfo) error {
 	clientSet, err := getClientSet(ctx, info)
 	if err != nil {
 		return err
@@ -762,7 +923,7 @@ func getClientSet(ctx context.Context, info *types.ClusterInfo) (kubernetes.Inte
 	if err != nil {
 		return nil, err
 	}
-	svc, err := getTKEServiceClient(ctx, state, "GET")
+	svc, err := getTKEServiceClient(state, "GET")
 	if err != nil {
 		return nil, err
 	}
@@ -850,4 +1011,98 @@ func (d *Driver) GetK8SCapabilities(ctx context.Context, opts *types.DriverOptio
 		},
 	}
 	return capabilities, nil
+}
+
+func getWrapAddClusterInstancesRequest(state, newState *state, nodeCount int64) (*ccs.AddClusterInstancesRequest, error) {
+	logrus.Debugf("invoking get wrap request of AddClusterInstances")
+	// goodsNum is the new nodes count that will be added to the cluster
+	state.GoodsNum = newState.NodeCount - nodeCount
+
+	if newState.InstanceType != "" {
+		state.InstanceType = newState.InstanceType
+	}
+	if newState.BandwidthType != "" {
+		state.BandwidthType = newState.BandwidthType
+	}
+	if newState.Bandwidth != 0 {
+		state.Bandwidth = newState.Bandwidth
+	}
+	if newState.WanIP != 0 {
+		state.WanIP = newState.WanIP
+	}
+	if newState.IsVpcGateway != 0 {
+		state.IsVpcGateway = newState.IsVpcGateway
+	}
+	if newState.StorageSize != 0 {
+		state.StorageSize = newState.StorageSize
+	}
+	if newState.RootSize != 0 {
+		state.RootSize = newState.RootSize
+	}
+	if newState.SecretID != "" {
+		state.SecretID = newState.SecretID
+	}
+	if newState.SecretKey != "" {
+		state.SecretKey = newState.SecretKey
+	}
+	content, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+	request := ccs.NewAddClusterInstancesRequest()
+	err = request.FromJSONString(string(content))
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+func getWrapModifyClusterAttributesRequest(state, newState *state) (*ccs.ModifyClusterAttributesRequest, error) {
+	logrus.Debugf("invoking get wrap request of ModifyClusterAttributes")
+	if newState.ClusterName != "" {
+		state.ClusterName = newState.ClusterName
+	}
+	if newState.ClusterDesc != "" {
+		state.ClusterDesc = newState.ClusterDesc
+	}
+	if newState.SecretID != "" {
+		state.SecretID = newState.SecretID
+	}
+	if newState.SecretKey != "" {
+		state.SecretKey = newState.SecretKey
+	}
+	content, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+
+	request := ccs.NewModifyClusterAttributesRequest()
+	err = request.FromJSONString(string(content))
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+func getWrapModifyProjectIDRequest(state, newState *state) (*ccs.ModifyProjectIDRequest, error) {
+	logrus.Debugf("invoking get wrap request of ModifyProjectId")
+	if state.ProjectID != newState.ProjectID {
+		state.ProjectID = newState.ProjectID
+	}
+	if newState.SecretID != "" {
+		state.SecretID = newState.SecretID
+	}
+	if newState.SecretKey != "" {
+		state.SecretKey = newState.SecretKey
+	}
+	content, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+	request := ccs.NewModifyProjectIDRequest()
+	err = request.FromJSONString(string(content))
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
 }
